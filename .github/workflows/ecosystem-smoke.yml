@@ -1,0 +1,38 @@
+name: Ecosystem smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.12
+
+      - name: Install core
+        run: uv sync --extra dev
+
+      - name: Smoke plugin discovery
+        run: |
+          uv run python - <<'PY'
+          from sendparcel.provider import BaseProvider
+          from sendparcel.registry import registry
+
+          class SmokeProvider(BaseProvider):
+              slug = "smoke"
+              display_name = "Smoke"
+
+              async def create_shipment(self, **kwargs):
+                  return {}
+
+          registry.register(SmokeProvider)
+          assert registry.get_by_slug("smoke") is SmokeProvider
+          print("plugin discovery smoke ok")
+          PY
