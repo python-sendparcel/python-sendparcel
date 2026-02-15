@@ -1,9 +1,14 @@
 """ShipmentFlow unit tests."""
 
+import httpx
 import pytest
 
 from conftest import DemoOrder, InMemoryRepository
-from sendparcel.exceptions import InvalidTransitionError
+from sendparcel.exceptions import (
+    CommunicationError,
+    InvalidCallbackError,
+    InvalidTransitionError,
+)
 from sendparcel.flow import ShipmentFlow
 from sendparcel.provider import BaseProvider
 from sendparcel.registry import registry
@@ -99,3 +104,70 @@ async def test_cancel_shipment_transitions_to_cancelled() -> None:
 
     assert cancelled is True
     assert shipment.status == "cancelled"
+
+
+class FlowErrorProvider(BaseProvider):
+    slug = "flow-error"
+    display_name = "Flow Error Provider"
+
+    async def create_shipment(self, **kwargs):
+        raise httpx.ConnectError("connection refused")
+
+    async def verify_callback(self, data, headers, **kwargs):
+        pass
+
+    async def handle_callback(self, data, headers, **kwargs):
+        pass
+
+
+class TestFlowErrorHandling:
+    @pytest.mark.asyncio
+    async def test_create_shipment_wraps_httpx_error(self) -> None:
+        repository = InMemoryRepository()
+        registry.register(FlowErrorProvider)
+        flow = ShipmentFlow(repository=repository)
+
+        with pytest.raises(CommunicationError, match="connection refused"):
+            await flow.create_shipment(DemoOrder(), "flow-error")
+
+    @pytest.mark.asyncio
+    async def test_create_shipment_wraps_generic_provider_error(self) -> None:
+        class BrokenProvider(BaseProvider):
+            slug = "broken"
+            display_name = "Broken"
+
+            async def create_shipment(self, **kwargs):
+                raise RuntimeError("internal provider bug")
+
+        repository = InMemoryRepository()
+        registry.register(BrokenProvider)
+        flow = ShipmentFlow(repository=repository)
+
+        with pytest.raises(CommunicationError, match="internal provider bug"):
+            await flow.create_shipment(DemoOrder(), "broken")
+
+    @pytest.mark.asyncio
+    async def test_sendparcel_exceptions_pass_through_unwrapped(self) -> None:
+        """InvalidCallbackError should NOT be double-wrapped."""
+
+        class RejectingProvider(BaseProvider):
+            slug = "rejecting"
+            display_name = "Rejecting"
+
+            async def create_shipment(self, **kwargs):
+                return {"external_id": "r-1", "tracking_number": "trk-r"}
+
+            async def verify_callback(self, data, headers, **kwargs):
+                raise InvalidCallbackError("bad signature")
+
+            async def handle_callback(self, data, headers, **kwargs):
+                pass
+
+        repository = InMemoryRepository()
+        registry.register(RejectingProvider)
+        flow = ShipmentFlow(repository=repository)
+
+        shipment = await flow.create_shipment(DemoOrder(), "rejecting")
+
+        with pytest.raises(InvalidCallbackError, match="bad signature"):
+            await flow.handle_callback(shipment, {}, {})
