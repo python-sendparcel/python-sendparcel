@@ -9,7 +9,6 @@ from sendparcel.exceptions import (
     SendParcelException,
 )
 from sendparcel.fsm import (
-    ALLOWED_CALLBACKS,
     STATUS_TO_CALLBACK,
     create_shipment_machine,
 )
@@ -134,15 +133,21 @@ class ShipmentFlow:
             ) from exc
 
     def _resolve_callback(self, status_value: str | None) -> str | None:
+        """Map a provider status value to an FSM callback name.
+
+        Only accepts values from STATUS_TO_CALLBACK mapping.
+        Raw callback names (e.g., "cancel") are NOT accepted as
+        status values -- providers must return status enum values
+        (e.g., "cancelled").
+        """
         if status_value is None:
             return None
-        if status_value in ALLOWED_CALLBACKS:
-            return status_value
         callback = STATUS_TO_CALLBACK.get(status_value)
         if callback:
             return callback
         raise InvalidTransitionError(
-            f"Unknown status transition {status_value!r}"
+            f"Unknown status value {status_value!r}. "
+            f"Expected one of: {', '.join(sorted(STATUS_TO_CALLBACK))}"
         )
 
     def _trigger(self, shipment: Shipment, callback: str, **kwargs) -> None:

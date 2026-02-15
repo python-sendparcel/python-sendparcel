@@ -171,3 +171,37 @@ class TestFlowErrorHandling:
 
         with pytest.raises(InvalidCallbackError, match="bad signature"):
             await flow.handle_callback(shipment, {}, {})
+
+
+class TestResolveCallback:
+    @pytest.mark.asyncio
+    async def test_raw_callback_name_is_rejected(self) -> None:
+        """Passing 'cancel' as a status value should fail, not be treated as callback."""
+
+        class RawCallbackProvider(BaseProvider):
+            slug = "raw-cb"
+            display_name = "Raw Callback"
+
+            async def create_shipment(self, **kwargs):
+                return {"external_id": "rc-1", "tracking_number": "trk-rc"}
+
+            async def verify_callback(self, data, headers, **kwargs):
+                pass
+
+            async def handle_callback(self, data, headers, **kwargs):
+                pass
+
+            async def fetch_shipment_status(self, **kwargs):
+                # Provider returns raw callback name instead of status value
+                return {"status": "cancel"}
+
+        repository = InMemoryRepository()
+        registry.register(RawCallbackProvider)
+        flow = ShipmentFlow(
+            repository=repository,
+            config={"raw-cb": {}},
+        )
+        shipment = await flow.create_shipment(DemoOrder(), "raw-cb")
+
+        with pytest.raises(InvalidTransitionError):
+            await flow.fetch_and_update_status(shipment)
