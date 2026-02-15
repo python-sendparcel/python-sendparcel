@@ -27,6 +27,8 @@ async def test_optional_methods_default_to_not_implemented() -> None:
     provider = MinimalProvider(DemoShipment(), config={})
 
     with pytest.raises(NotImplementedError):
+        await provider.verify_callback({}, {})
+    with pytest.raises(NotImplementedError):
         await provider.create_label()
     with pytest.raises(NotImplementedError):
         await provider.handle_callback({}, {})

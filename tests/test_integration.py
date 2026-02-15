@@ -18,6 +18,9 @@ class IntegrationProvider(BaseProvider):
     async def create_label(self, **kwargs):
         return {"format": "PDF", "url": "https://labels/int.pdf"}
 
+    async def verify_callback(self, data: dict, headers: dict, **kwargs):
+        pass  # Accept all callbacks in test
+
     async def handle_callback(self, data: dict, headers: dict, **kwargs):
         if data.get("event") == "picked_up" and self.shipment.may_trigger(
             "mark_in_transit"

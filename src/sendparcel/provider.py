@@ -40,7 +40,12 @@ class BaseProvider(ABC):
     async def verify_callback(
         self, data: dict, headers: dict, **kwargs
     ) -> None:
-        """Verify callback authenticity."""
+        """Verify callback authenticity.
+
+        Providers that accept callbacks MUST override this to validate
+        signatures/tokens. Raise InvalidCallbackError to reject.
+        """
+        raise NotImplementedError
 
     async def handle_callback(
         self, data: dict, headers: dict, **kwargs

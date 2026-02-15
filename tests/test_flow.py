@@ -19,6 +19,9 @@ class FlowProvider(BaseProvider):
     async def create_label(self, **kwargs):
         return {"format": "PDF", "url": "https://labels/123.pdf"}
 
+    async def verify_callback(self, data: dict, headers: dict, **kwargs):
+        pass  # Accept all callbacks in test
+
     async def handle_callback(self, data: dict, headers: dict, **kwargs):
         if self.shipment.may_trigger("mark_in_transit"):
             self.shipment.mark_in_transit()
