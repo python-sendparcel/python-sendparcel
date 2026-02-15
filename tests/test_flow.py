@@ -13,7 +13,6 @@ from sendparcel.flow import ShipmentFlow
 from sendparcel.provider import BaseProvider
 from sendparcel.registry import registry
 
-
 # ---------------------------------------------------------------------------
 # Reusable test providers
 # ---------------------------------------------------------------------------
@@ -104,7 +103,7 @@ class TestCreateShipment:
 
     @pytest.mark.asyncio
     async def test_provider_returning_label_sets_label_ready(self) -> None:
-        """When create_shipment result contains a label, status should be label_ready."""
+        """When result contains a label, status is label_ready."""
 
         class LabelIncludedProvider(BaseProvider):
             slug = "label-incl"
@@ -199,7 +198,7 @@ class TestCreateLabel:
 class TestHandleCallback:
     @pytest.mark.asyncio
     async def test_callback_transitions_shipment(self) -> None:
-        """handle_callback delegates to provider which transitions the shipment."""
+        """handle_callback delegates to provider, transitions shipment."""
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
@@ -285,7 +284,7 @@ class TestFetchAndUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_none_status_does_not_transition(self) -> None:
-        """When provider returns None status, shipment is saved without transition."""
+        """Provider returns None status: shipment saved, no transition."""
         flow, repository = _register_and_flow(
             FlowProvider,
             config={"flow": {"status_override": None}},
@@ -336,7 +335,7 @@ class TestCancelShipment:
 
     @pytest.mark.asyncio
     async def test_provider_returns_false_keeps_status(self) -> None:
-        """When provider.cancel_shipment returns False, status stays unchanged."""
+        """When provider.cancel_shipment returns False, status unchanged."""
 
         class NoCancelProvider(BaseProvider):
             slug = "no-cancel"
@@ -450,7 +449,7 @@ class TestErrorWrapping:
 class TestResolveCallback:
     @pytest.mark.asyncio
     async def test_raw_callback_name_is_rejected(self) -> None:
-        """Passing 'cancel' as a status value should fail, not be treated as callback."""
+        """'cancel' as status should fail, not be treated as callback."""
 
         class RawCallbackProvider(BaseProvider):
             slug = "raw-cb"
@@ -483,7 +482,7 @@ class TestResolveCallback:
 class TestTrigger:
     @pytest.mark.asyncio
     async def test_invalid_transition_from_current_status(self) -> None:
-        """Triggering a callback not allowed from current status raises InvalidTransitionError."""
+        """Invalid callback from current status raises InvalidTransition."""
         flow, _ = _register_and_flow(
             FlowProvider,
             config={"flow": {"status_override": "delivered"}},
@@ -499,7 +498,7 @@ class TestTrigger:
 
     @pytest.mark.asyncio
     async def test_cancel_from_in_transit_raises(self) -> None:
-        """Cancel is only allowed from new/created/label_ready, not in_transit."""
+        """Cancel only allowed from new/created/label_ready, not in_transit."""
         flow, _ = _register_and_flow(
             FlowProvider,
             config={"flow": {"status_override": "in_transit"}},

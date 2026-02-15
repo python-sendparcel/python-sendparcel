@@ -6,11 +6,6 @@ from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import InvalidCallbackError
 from sendparcel.fsm import create_shipment_machine
 from sendparcel.providers.dummy import DummyProvider
-from sendparcel.types import (
-    LabelInfo,
-    ShipmentCreateResult,
-    ShipmentStatusResponse,
-)
 
 
 class DummyShipment:

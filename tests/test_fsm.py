@@ -1,4 +1,7 @@
-"""FSM transition tests -- exhaustive coverage of all valid and invalid transitions."""
+"""FSM transition tests.
+
+Exhaustive coverage of all valid and invalid transitions.
+"""
 
 import pytest
 from transitions.core import MachineError

@@ -22,7 +22,8 @@ def _require_label_url(event_data):
     model = event_data.model
     if not getattr(model, "label_url", ""):
         raise MachineError(
-            f"Transition '{event_data.event.name}' requires label_url to be set."
+            f"Transition '{event_data.event.name}'"
+            " requires label_url to be set."
         )
 
 
@@ -31,7 +32,8 @@ def _require_tracking_number(event_data):
     model = event_data.model
     if not getattr(model, "tracking_number", ""):
         raise MachineError(
-            f"Transition '{event_data.event.name}' requires tracking_number to be set."
+            f"Transition '{event_data.event.name}'"
+            " requires tracking_number to be set."
         )
 
 

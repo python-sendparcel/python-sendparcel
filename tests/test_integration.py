@@ -153,7 +153,7 @@ async def test_cancel_rejected_by_provider() -> None:
 
 @pytest.mark.asyncio
 async def test_failure_at_in_transit_state() -> None:
-    """Create -> transit (via callback) -> fail (via callback) -> status is failed."""
+    """Create -> transit -> fail (via callbacks) -> status is failed."""
     repository = InMemoryRepository()
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
@@ -175,7 +175,7 @@ async def test_failure_at_in_transit_state() -> None:
 
 @pytest.mark.asyncio
 async def test_callback_with_invalid_signature() -> None:
-    """Create -> handle_callback with invalid signature -> InvalidCallbackError propagates."""
+    """Create -> handle_callback with bad signature -> InvalidCallbackError."""
     repository = InMemoryRepository()
     registry.register(RejectingCallbackProvider)
     flow = ShipmentFlow(repository=repository)
@@ -219,7 +219,7 @@ async def test_return_after_delivery() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_and_update_status_poll_flow() -> None:
-    """Create -> fetch_and_update_status polls provider -> transitions to in_transit."""
+    """Create -> fetch_and_update_status polls -> transitions to in_transit."""
     repository = InMemoryRepository()
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
@@ -227,7 +227,7 @@ async def test_fetch_and_update_status_poll_flow() -> None:
     shipment = await flow.create_shipment(DemoOrder(), "full-lifecycle")
     assert shipment.status == "created"
 
-    # FullLifecycleProvider.fetch_shipment_status returns {"status": "in_transit"}
+    # FullLifecycleProvider.fetch_shipment_status -> "in_transit"
     shipment = await flow.fetch_and_update_status(shipment)
 
     assert shipment.status == "in_transit"
@@ -251,7 +251,7 @@ async def test_provider_create_shipment_communication_error() -> None:
 
 @pytest.mark.asyncio
 async def test_full_lifecycle_create_label_transit_deliver_return() -> None:
-    """Complete lifecycle: create -> label -> transit -> out_for_delivery -> deliver -> return."""
+    """Full lifecycle: create -> label -> transit -> deliver -> return."""
     repository = InMemoryRepository()
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
