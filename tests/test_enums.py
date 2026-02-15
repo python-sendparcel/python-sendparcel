@@ -1,6 +1,14 @@
 """Enum tests."""
 
-from sendparcel.enums import ShipmentStatus
+from sendparcel.enums import ConfirmationMethod, ShipmentStatus
+
+
+class TestConfirmationMethod:
+    def test_push_value(self) -> None:
+        assert ConfirmationMethod.PUSH == "PUSH"
+
+    def test_pull_value(self) -> None:
+        assert ConfirmationMethod.PULL == "PULL"
 
 
 def test_shipment_status_values() -> None:

@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
+from sendparcel.enums import ConfirmationMethod
 from sendparcel.protocols import Shipment
 from sendparcel.types import (
     LabelInfo,
@@ -18,6 +19,7 @@ class BaseProvider(ABC):
     display_name: ClassVar[str] = ""
     supported_countries: ClassVar[list[str]] = []
     supported_services: ClassVar[list[str]] = []
+    confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.PUSH
 
     def __init__(self, shipment: Shipment, config: dict | None = None) -> None:
         self.shipment = shipment

@@ -3,6 +3,7 @@
 import pytest
 
 from conftest import DemoShipment
+from sendparcel.enums import ConfirmationMethod
 from sendparcel.provider import BaseProvider
 
 
@@ -33,3 +34,12 @@ async def test_optional_methods_default_to_not_implemented() -> None:
         await provider.fetch_shipment_status()
     with pytest.raises(NotImplementedError):
         await provider.cancel_shipment()
+
+
+class TestConfirmationMethodOnProvider:
+    def test_default_confirmation_method_is_push(self) -> None:
+        provider = MinimalProvider(DemoShipment(), config={})
+        assert provider.confirmation_method == ConfirmationMethod.PUSH
+
+    def test_confirmation_method_is_class_var(self) -> None:
+        assert MinimalProvider.confirmation_method == ConfirmationMethod.PUSH

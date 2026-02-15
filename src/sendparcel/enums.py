@@ -15,3 +15,10 @@ class ShipmentStatus(StrEnum):
     CANCELLED = "cancelled"
     FAILED = "failed"
     RETURNED = "returned"
+
+
+class ConfirmationMethod(StrEnum):
+    """How the provider confirms shipment status updates."""
+
+    PUSH = "PUSH"
+    PULL = "PULL"

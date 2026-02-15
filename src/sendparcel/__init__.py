@@ -2,7 +2,7 @@
 
 __version__ = "0.1.0"
 
-from sendparcel.enums import ShipmentStatus
+from sendparcel.enums import ConfirmationMethod, ShipmentStatus
 from sendparcel.exceptions import (
     CommunicationError,
     InvalidCallbackError,
@@ -17,6 +17,7 @@ from sendparcel.registry import registry
 __all__ = [
     "BaseProvider",
     "CommunicationError",
+    "ConfirmationMethod",
     "DummyProvider",
     "InvalidCallbackError",
     "InvalidTransitionError",
