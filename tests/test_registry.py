@@ -78,3 +78,103 @@ def test_builtin_dummy_provider_is_discoverable() -> None:
     reg = PluginRegistry()
 
     assert reg.get_by_slug("dummy") is DummyProvider
+
+
+def test_ensure_discovered_triggers_on_get_by_slug() -> None:
+    reg = PluginRegistry()
+
+    assert reg._discovered is False
+
+    result = reg.get_by_slug("dummy")
+
+    assert result is DummyProvider
+    assert reg._discovered is True
+
+
+def test_ensure_discovered_triggers_on_get_choices() -> None:
+    reg = PluginRegistry()
+
+    assert reg._discovered is False
+
+    choices = reg.get_choices()
+
+    assert ("dummy", "Dummy") in choices
+    assert reg._discovered is True
+
+
+def test_entry_point_skips_non_baseprovider_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class EP:
+        def __init__(self, loaded) -> None:
+            self._loaded = loaded
+
+        def load(self):
+            return self._loaded
+
+    class NotAProvider:
+        slug = "bad"
+
+    registry_module = importlib.import_module("sendparcel.registry")
+    monkeypatch.setattr(
+        registry_module, "entry_points", lambda group: [EP(NotAProvider)]
+    )
+
+    reg = PluginRegistry()
+    reg.discover()
+
+    with pytest.raises(KeyError):
+        reg.get_by_slug("bad")
+
+
+def test_entry_point_skips_non_class_objects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class EP:
+        def __init__(self, loaded) -> None:
+            self._loaded = loaded
+
+        def load(self):
+            return self._loaded
+
+    registry_module = importlib.import_module("sendparcel.registry")
+    monkeypatch.setattr(
+        registry_module,
+        "entry_points",
+        lambda group: [EP("not-a-class"), EP(42), EP(lambda: None)],
+    )
+
+    reg = PluginRegistry()
+    reg.discover()
+
+    # Only builtins should be registered, none of the bad entry points
+    choices = reg.get_choices()
+    slugs = [slug for slug, _ in choices]
+    assert "not-a-class" not in slugs
+
+
+def test_get_choices_preserves_insertion_order() -> None:
+    reg = PluginRegistry()
+    reg._discovered = True
+
+    reg.register(ProviderA)
+    reg.register(ProviderC)
+
+    choices = reg.get_choices()
+
+    assert choices == [("a", "Provider A"), ("c", "Provider C")]
+
+
+def test_unregister_nonexistent_slug_is_silent() -> None:
+    reg = PluginRegistry()
+
+    reg.unregister("nonexistent")
+
+
+def test_reregister_same_class_is_idempotent() -> None:
+    reg = PluginRegistry()
+
+    reg.register(ProviderA)
+    reg.register(ProviderA)
+
+    assert reg.get_by_slug("a") is ProviderA
