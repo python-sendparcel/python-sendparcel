@@ -10,6 +10,8 @@ from sendparcel.fsm import ALLOWED_CALLBACKS, create_shipment_machine
 def test_happy_path_transitions() -> None:
     class Shipment:
         status = ShipmentStatus.NEW
+        label_url = "https://example.com/label.pdf"
+        tracking_number = "TRK-123"
 
     shipment = Shipment()
     create_shipment_machine(shipment)
@@ -45,3 +47,59 @@ def test_allowed_callbacks_contains_expected_triggers() -> None:
     assert "mark_delivered" in ALLOWED_CALLBACKS
     assert "cancel" in ALLOWED_CALLBACKS
     assert "fail" in ALLOWED_CALLBACKS
+
+
+class TestFSMGuards:
+    """Test that FSM guards prevent invalid transitions."""
+
+    def test_confirm_label_requires_label_url(self) -> None:
+        """Cannot transition to LABEL_READY without label_url."""
+
+        class Shipment:
+            status = ShipmentStatus.CREATED
+            label_url = ""
+            tracking_number = ""
+
+        shipment = Shipment()
+        create_shipment_machine(shipment)
+
+        with pytest.raises(MachineError, match="label_url"):
+            shipment.confirm_label()
+
+    def test_confirm_label_passes_with_label_url(self) -> None:
+        class Shipment:
+            status = ShipmentStatus.CREATED
+            label_url = "https://example.com/label.pdf"
+            tracking_number = ""
+
+        shipment = Shipment()
+        create_shipment_machine(shipment)
+
+        shipment.confirm_label()
+        assert shipment.status == ShipmentStatus.LABEL_READY
+
+    def test_mark_in_transit_requires_tracking_number(self) -> None:
+        """Cannot transition to IN_TRANSIT without tracking_number."""
+
+        class Shipment:
+            status = ShipmentStatus.CREATED
+            label_url = ""
+            tracking_number = ""
+
+        shipment = Shipment()
+        create_shipment_machine(shipment)
+
+        with pytest.raises(MachineError, match="tracking_number"):
+            shipment.mark_in_transit()
+
+    def test_mark_in_transit_passes_with_tracking_number(self) -> None:
+        class Shipment:
+            status = ShipmentStatus.CREATED
+            label_url = ""
+            tracking_number = "TRK-123"
+
+        shipment = Shipment()
+        create_shipment_machine(shipment)
+
+        shipment.mark_in_transit()
+        assert shipment.status == ShipmentStatus.IN_TRANSIT

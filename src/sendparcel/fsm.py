@@ -1,6 +1,7 @@
 """Shipment state machine definitions."""
 
 from transitions import Machine
+from transitions.core import MachineError
 
 from sendparcel.enums import ShipmentStatus
 
@@ -15,6 +16,25 @@ CALLBACK_NAMES = (
     "fail",
 )
 
+
+def _require_label_url(event_data):
+    """Guard: reject confirm_label if shipment has no label_url."""
+    model = event_data.model
+    if not getattr(model, "label_url", ""):
+        raise MachineError(
+            f"Transition '{event_data.event.name}' requires label_url to be set."
+        )
+
+
+def _require_tracking_number(event_data):
+    """Guard: reject mark_in_transit if shipment has no tracking_number."""
+    model = event_data.model
+    if not getattr(model, "tracking_number", ""):
+        raise MachineError(
+            f"Transition '{event_data.event.name}' requires tracking_number to be set."
+        )
+
+
 SHIPMENT_TRANSITIONS = [
     {
         "trigger": "confirm_created",
@@ -25,11 +45,13 @@ SHIPMENT_TRANSITIONS = [
         "trigger": "confirm_label",
         "source": ShipmentStatus.CREATED,
         "dest": ShipmentStatus.LABEL_READY,
+        "before": _require_label_url,
     },
     {
         "trigger": "mark_in_transit",
         "source": [ShipmentStatus.CREATED, ShipmentStatus.LABEL_READY],
         "dest": ShipmentStatus.IN_TRANSIT,
+        "before": _require_tracking_number,
     },
     {
         "trigger": "mark_out_for_delivery",
@@ -103,4 +125,5 @@ def create_shipment_machine(shipment) -> Machine:
         initial=initial,
         model_attribute="status",
         auto_transitions=False,
+        send_event=True,
     )
