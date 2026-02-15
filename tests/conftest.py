@@ -9,28 +9,52 @@ from decimal import Decimal
 import pytest
 
 from sendparcel.registry import registry
+from sendparcel.types import AddressInfo, ParcelInfo
 
 
 @dataclass
 class DemoOrder:
-    """Minimal order protocol implementation for tests."""
+    """Configurable order protocol implementation for tests."""
+
+    weight: Decimal = Decimal("1.0")
+    parcels: list[ParcelInfo] | None = None
+    sender_address: AddressInfo | None = None
+    receiver_address: AddressInfo | None = None
 
     def get_total_weight(self) -> Decimal:
-        return Decimal("1.0")
+        return self.weight
 
-    def get_parcels(self) -> list[dict]:
-        return []
+    def get_parcels(self) -> list[ParcelInfo]:
+        if self.parcels is not None:
+            return self.parcels
+        return [ParcelInfo(weight_kg=self.weight)]
 
-    def get_sender_address(self) -> dict:
-        return {}
+    def get_sender_address(self) -> AddressInfo:
+        if self.sender_address is not None:
+            return self.sender_address
+        return AddressInfo(
+            name="Test Sender",
+            line1="Sender St 1",
+            city="Warsaw",
+            postal_code="00-001",
+            country_code="PL",
+        )
 
-    def get_receiver_address(self) -> dict:
-        return {}
+    def get_receiver_address(self) -> AddressInfo:
+        if self.receiver_address is not None:
+            return self.receiver_address
+        return AddressInfo(
+            name="Test Receiver",
+            line1="Receiver St 2",
+            city="Berlin",
+            postal_code="10115",
+            country_code="DE",
+        )
 
 
 @dataclass
 class DemoShipment:
-    """Minimal shipment protocol implementation for tests."""
+    """Configurable shipment protocol implementation for tests."""
 
     id: str = "shipment-1"
     order: DemoOrder = field(default_factory=DemoOrder)
@@ -45,10 +69,13 @@ class InMemoryRepository:
     """Minimal async repository used by flow tests."""
 
     def __init__(self) -> None:
-        self.saved: list[DemoShipment] = []
+        self._store: dict[str, DemoShipment] = {}
+        self.save_count: int = 0
 
     async def get_by_id(self, shipment_id: str) -> DemoShipment:
-        return DemoShipment(id=shipment_id)
+        if shipment_id not in self._store:
+            raise KeyError(f"Shipment {shipment_id!r} not found")
+        return self._store[shipment_id]
 
     async def create(self, **kwargs) -> DemoShipment:
         shipment = DemoShipment(
@@ -56,21 +83,38 @@ class InMemoryRepository:
             provider=kwargs["provider"],
             status=kwargs.get("status", "new"),
         )
-        self.saved.append(shipment)
+        self._store[shipment.id] = shipment
         return shipment
 
     async def save(self, shipment: DemoShipment) -> DemoShipment:
-        self.saved.append(shipment)
+        self._store[shipment.id] = shipment
+        self.save_count += 1
         return shipment
 
     async def update_status(
         self, shipment_id: str, status: str, **fields
     ) -> DemoShipment:
-        shipment = DemoShipment(id=shipment_id, status=status)
+        shipment = self._store.get(shipment_id, DemoShipment(id=shipment_id))
+        shipment.status = status
         for key, value in fields.items():
             setattr(shipment, key, value)
-        self.saved.append(shipment)
+        self._store[shipment_id] = shipment
         return shipment
+
+
+@pytest.fixture
+def demo_order() -> DemoOrder:
+    return DemoOrder()
+
+
+@pytest.fixture
+def demo_shipment() -> DemoShipment:
+    return DemoShipment()
+
+
+@pytest.fixture
+def repository() -> InMemoryRepository:
+    return InMemoryRepository()
 
 
 @pytest.fixture(autouse=True)
