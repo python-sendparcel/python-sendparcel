@@ -8,46 +8,43 @@ requires-python = ">=3.12"
 authors = [{ name = "Dominik Kozaczko", email = "dominik@kozaczko.info" }]
 keywords = ["shipping", "parcel", "delivery", "sendparcel", "logistics"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Typing :: Typed",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
 ]
-dependencies = [
-    "transitions>=0.9.0",
-    "httpx>=0.27.0",
-    "anyio>=4.0",
-]
+dependencies = ["transitions>=0.9.0", "httpx>=0.27.0", "anyio>=4.0"]
 
 [project.optional-dependencies]
 dev = [
-    "pre-commit>=4.0",
-    "pre-commit-hooks>=6.0.0",
-    "pytest>=8.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=5.0",
-    "ruff>=0.9.0",
-    "ty>=0.0.16",
+  "pre-commit>=4.0",
+  "pre-commit-hooks>=6.0.0",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.9.0",
+  "ty>=0.0.16",
 ]
 dummy = []
 django = ["django-sendparcel>=0.1.0"]
 fastapi = ["fastapi-sendparcel>=0.1.0"]
 litestar = ["litestar-sendparcel>=0.1.0"]
+inpost = ["python-sendparcel-inpost>=0.1.0"]
 providers = []
 frameworks = [
-    "django-sendparcel>=0.1.0",
-    "fastapi-sendparcel>=0.1.0",
-    "litestar-sendparcel>=0.1.0",
+  "django-sendparcel>=0.1.0",
+  "fastapi-sendparcel>=0.1.0",
+  "litestar-sendparcel>=0.1.0",
 ]
 all = [
-    "django-sendparcel>=0.1.0",
-    "fastapi-sendparcel>=0.1.0",
-    "litestar-sendparcel>=0.1.0",
+  "django-sendparcel>=0.1.0",
+  "fastapi-sendparcel>=0.1.0",
+  "litestar-sendparcel>=0.1.0",
 ]
 
 [project.urls]
@@ -98,6 +95,7 @@ invalid-return-type = "ignore"
 django-sendparcel = { path = "../django-sendparcel", editable = true }
 fastapi-sendparcel = { path = "../fastapi-sendparcel", editable = true }
 litestar-sendparcel = { path = "../litestar-sendparcel", editable = true }
+python-sendparcel-inpost = { path = "../python-sendparcel-inpost", editable = true }
 
 [tool.coverage.run]
 branch = true

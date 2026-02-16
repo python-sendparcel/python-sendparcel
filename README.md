@@ -38,6 +38,14 @@ pip install python-sendparcel
 uv add python-sendparcel
 ```
 
+### Provider plugins
+
+Install provider packages for real carrier APIs:
+
+```bash
+pip install python-sendparcel[inpost]    # InPost ShipX (locker & courier)
+```
+
 ### Framework adapters
 
 Install the adapter for your web framework:
@@ -55,6 +63,7 @@ pip install python-sendparcel[all]       # everything
 | Extra | Installs |
 |---|---|
 | `dummy` | Built-in dummy provider (no extra package) |
+| `inpost` | `python-sendparcel-inpost` — InPost ShipX provider |
 | `django` | `django-sendparcel` |
 | `fastapi` | `fastapi-sendparcel` |
 | `litestar` | `litestar-sendparcel` |
@@ -346,15 +355,19 @@ Beyond the required `create_shipment`, providers can override:
 python-sendparcel is the core library. Framework-specific integrations are
 provided by separate packages:
 
-| Package | Framework | Repository |
+| Package | Type | Repository |
 |---|---|---|
-| [django-sendparcel](https://github.com/sendparcel/django-sendparcel) | Django | `sendparcel/django-sendparcel` |
-| [fastapi-sendparcel](https://github.com/sendparcel/fastapi-sendparcel) | FastAPI | `sendparcel/fastapi-sendparcel` |
-| [litestar-sendparcel](https://github.com/sendparcel/litestar-sendparcel) | Litestar | `sendparcel/litestar-sendparcel` |
+| [python-sendparcel-inpost](https://github.com/sendparcel/python-sendparcel-inpost) | Provider — InPost ShipX (locker & courier) | `sendparcel/python-sendparcel-inpost` |
+| [django-sendparcel](https://github.com/sendparcel/django-sendparcel) | Framework adapter — Django | `sendparcel/django-sendparcel` |
+| [fastapi-sendparcel](https://github.com/sendparcel/fastapi-sendparcel) | Framework adapter — FastAPI | `sendparcel/fastapi-sendparcel` |
+| [litestar-sendparcel](https://github.com/sendparcel/litestar-sendparcel) | Framework adapter — Litestar | `sendparcel/litestar-sendparcel` |
 
-Each wrapper provides framework-native models, views/routes, and repository
-implementations so you don't have to write the boilerplate shown in the Quick
-Start above.
+Each framework wrapper provides framework-native models, views/routes, and
+repository implementations so you don't have to write the boilerplate shown in
+the Quick Start above.
+
+Provider packages (like `python-sendparcel-inpost`) supply carrier-specific
+`BaseProvider` subclasses that integrate with real shipping APIs.
 
 ## Supported Versions
 
