@@ -5,7 +5,19 @@ description = "Framework-agnostic parcel shipping core for Python."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
-authors = [{ name = "Dominik Kozaczko" }]
+authors = [{ name = "Dominik Kozaczko", email = "dominik@kozaczko.info" }]
+keywords = ["shipping", "parcel", "delivery", "sendparcel", "logistics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "transitions>=0.9.0",
     "httpx>=0.27.0",
@@ -37,6 +49,13 @@ all = [
     "fastapi-sendparcel>=0.1.0",
     "litestar-sendparcel>=0.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/sendparcel/python-sendparcel"
+Documentation = "https://python-sendparcel.readthedocs.io/"
+Repository = "https://github.com/sendparcel/python-sendparcel"
+Changelog = "https://github.com/sendparcel/python-sendparcel/blob/main/CHANGELOG.md"
+"Issue Tracker" = "https://github.com/sendparcel/python-sendparcel/issues"
 
 [build-system]
 requires = ["hatchling"]
