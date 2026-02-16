@@ -39,8 +39,8 @@ def test_core_types_shape_examples() -> None:
     assert result["label"]["format"] == "PDF"
 
 
-class TestAddressInfoRequired:
-    def test_required_fields_present(self) -> None:
+class TestAddressInfoAllOptional:
+    def test_generic_address_pattern(self) -> None:
         addr: AddressInfo = {
             "name": "John",
             "line1": "Main St 1",
@@ -49,6 +49,25 @@ class TestAddressInfoRequired:
             "country_code": "PL",
         }
         assert addr["country_code"] == "PL"
+
+    def test_inpost_address_pattern(self) -> None:
+        addr: AddressInfo = {
+            "first_name": "Jan",
+            "last_name": "Kowalski",
+            "street": "Marszalkowska",
+            "building_number": "1",
+            "city": "Warszawa",
+            "postal_code": "00-001",
+            "country_code": "PL",
+            "phone": "500100200",
+            "email": "jan@example.com",
+        }
+        assert addr["first_name"] == "Jan"
+        assert addr["building_number"] == "1"
+
+    def test_empty_address_is_valid(self) -> None:
+        addr: AddressInfo = {}
+        assert isinstance(addr, dict)
 
     def test_optional_fields_can_be_omitted(self) -> None:
         addr: AddressInfo = {
@@ -63,6 +82,11 @@ class TestAddressInfoRequired:
         assert "state" not in addr
         assert "phone" not in addr
         assert "email" not in addr
+        assert "first_name" not in addr
+        assert "last_name" not in addr
+        assert "street" not in addr
+        assert "building_number" not in addr
+        assert "flat_number" not in addr
 
 
 class TestParcelInfoRequired:
