@@ -178,3 +178,46 @@ def test_reregister_same_class_is_idempotent() -> None:
     reg.register(ProviderA)
 
     assert reg.get_by_slug("a") is ProviderA
+
+
+class HiddenProvider(BaseProvider):
+    slug = "hidden"
+    display_name = "Hidden Provider"
+    user_selectable = False
+
+    async def create_shipment(self, **kwargs):
+        return {}
+
+
+def test_non_selectable_provider_excluded_from_get_choices() -> None:
+    reg = PluginRegistry()
+    reg._discovered = True
+
+    reg.register(ProviderA)
+    reg.register(HiddenProvider)
+
+    choices = reg.get_choices()
+    slugs = [slug for slug, _ in choices]
+
+    assert "a" in slugs
+    assert "hidden" not in slugs
+
+
+def test_selectable_provider_included_in_get_choices() -> None:
+    reg = PluginRegistry()
+    reg._discovered = True
+
+    reg.register(ProviderA)
+
+    choices = reg.get_choices()
+
+    assert ("a", "Provider A") in choices
+
+
+def test_non_selectable_provider_still_accessible_via_get_by_slug() -> None:
+    reg = PluginRegistry()
+    reg._discovered = True
+
+    reg.register(HiddenProvider)
+
+    assert reg.get_by_slug("hidden") is HiddenProvider

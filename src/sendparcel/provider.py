@@ -20,6 +20,7 @@ class BaseProvider(ABC):
     supported_countries: ClassVar[list[str]] = []
     supported_services: ClassVar[list[str]] = []
     confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.PUSH
+    user_selectable: ClassVar[bool] = True
 
     def __init__(self, shipment: Shipment, config: dict | None = None) -> None:
         self.shipment = shipment

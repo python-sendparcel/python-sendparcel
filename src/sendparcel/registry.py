@@ -43,9 +43,13 @@ class PluginRegistry:
         return self._providers[slug]
 
     def get_choices(self) -> list[tuple[str, str]]:
-        """Get provider slug/display pairs."""
+        """Get provider slug/display pairs for user-facing selection."""
         self._ensure_discovered()
-        return [(p.slug, p.display_name) for p in self._providers.values()]
+        return [
+            (p.slug, p.display_name)
+            for p in self._providers.values()
+            if p.user_selectable
+        ]
 
     def _ensure_discovered(self) -> None:
         if not self._discovered:
