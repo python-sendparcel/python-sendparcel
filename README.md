@@ -21,7 +21,7 @@ Framework-agnostic parcel shipping core for Python.
 - **BaseProvider ABC** — define your own provider by subclassing a single class with well-defined async methods.
 - **Built-in DummyProvider** — deterministic reference provider for testing and local development.
 - **Pluggable validators** — attach validator callables to `ShipmentFlow` for global or per-operation validation.
-- **Runtime protocols** — `Order`, `Shipment`, and `ShipmentRepository` are `@runtime_checkable` protocols; bring your own models and persistence.
+- **Runtime protocols** — `Shipment` and `ShipmentRepository` are `@runtime_checkable` protocols; bring your own models and persistence.
 - **Async-first** — the entire runtime is async, powered by [anyio](https://anyio.readthedocs.io/).
 
 ## Installation
@@ -73,41 +73,11 @@ pip install python-sendparcel[all]       # everything
 
 ## Quick Start
 
-python-sendparcel is framework-agnostic. You provide implementations of three
-protocols — `Order`, `Shipment`, and `ShipmentRepository` — and the library
+python-sendparcel is framework-agnostic. You provide implementations of two
+protocols — `Shipment` and `ShipmentRepository` — and the library
 handles orchestration, state transitions, and provider communication.
 
-### 1. Implement the Order protocol
-
-```python
-from decimal import Decimal
-from dataclasses import dataclass, field
-
-from sendparcel.types import AddressInfo, ParcelInfo
-
-
-@dataclass
-class MyOrder:
-    """Satisfies the sendparcel Order protocol."""
-
-    sender: AddressInfo
-    receiver: AddressInfo
-    parcels: list[ParcelInfo] = field(default_factory=list)
-
-    def get_total_weight(self) -> Decimal:
-        return sum(p["weight_kg"] for p in self.parcels)
-
-    def get_parcels(self) -> list[ParcelInfo]:
-        return self.parcels
-
-    def get_sender_address(self) -> AddressInfo:
-        return self.sender
-
-    def get_receiver_address(self) -> AddressInfo:
-        return self.receiver
-```
-
-### 2. Implement the Shipment and ShipmentRepository protocols
+### 1. Implement the Shipment and ShipmentRepository protocols
 
 ```python
 from dataclasses import dataclass
@@ -118,7 +88,6 @@ class MyShipment:
     """Satisfies the sendparcel Shipment protocol."""
 
     id: str
-    order: MyOrder
     status: str = ""
     provider: str = ""
     external_id: str = ""
@@ -141,7 +110,6 @@ class InMemoryRepository:
         shipment_id = str(self._counter)
         shipment = MyShipment(
             id=shipment_id,
-            order=kwargs["order"],
             status=kwargs.get("status", ""),
             provider=kwargs.get("provider", ""),
         )
@@ -160,7 +128,7 @@ class InMemoryRepository:
         return shipment
 ```
 
-### 3. Create a shipment with ShipmentFlow
+### 2. Create a shipment with ShipmentFlow
 
 ```python
 import anyio
@@ -210,7 +178,7 @@ sendparcel/
 ├── __init__.py          # Public API surface
 ├── enums.py             # ShipmentStatus, ConfirmationMethod
 ├── types.py             # TypedDict definitions (AddressInfo, ParcelInfo, …)
-├── protocols.py         # Order, Shipment, ShipmentRepository protocols
+├── protocols.py         # Shipment, ShipmentRepository protocols
 ├── provider.py          # BaseProvider ABC
 ├── registry.py          # PluginRegistry with entry-point discovery
 ├── flow.py              # ShipmentFlow orchestrator
@@ -231,7 +199,7 @@ sendparcel/
 | `PluginRegistry` | `registry.py` | Discovers providers from `sendparcel.providers` entry points and built-ins. Global `registry` singleton. |
 | `ShipmentStatus` | `enums.py` | 9-state `StrEnum` representing the shipment lifecycle. |
 | Domain types | `types.py` | `AddressInfo`, `ParcelInfo`, `LabelInfo`, `ShipmentCreateResult`, `ShipmentStatusResponse`, `TrackingEvent`. |
-| Protocols | `protocols.py` | `Order`, `Shipment`, `ShipmentRepository` — all `@runtime_checkable`. |
+| Protocols | `protocols.py` | `Shipment`, `ShipmentRepository` — all `@runtime_checkable`. |
 | FSM | `fsm.py` | Transition definitions with guards (e.g. `label_url` required before `confirm_label`). |
 | Validators | `validators.py` | Chain of callables invoked before provider operations. |
 

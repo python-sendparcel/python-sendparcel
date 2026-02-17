@@ -5,7 +5,7 @@ from decimal import Decimal
 import httpx
 import pytest
 
-from conftest import DemoOrder, InMemoryRepository
+from conftest import InMemoryRepository
 from sendparcel.exceptions import (
     CommunicationError,
     InvalidCallbackError,
@@ -602,26 +602,3 @@ class TestTrigger:
             InvalidTransitionError, match="cannot be executed from status"
         ):
             await flow.cancel_shipment(shipment)
-
-
-# ---------------------------------------------------------------------------
-# TestCreateShipmentFromOrder
-# ---------------------------------------------------------------------------
-
-
-class TestCreateShipmentFromOrder:
-    @pytest.mark.asyncio
-    async def test_delegates_to_create_shipment(self) -> None:
-        flow, _ = _register_and_flow(FlowProvider)
-        order = DemoOrder()
-        shipment = await flow.create_shipment_from_order(order, "flow")
-        assert shipment.status == "created"
-        assert shipment.external_id == "ext-123"
-
-    @pytest.mark.asyncio
-    async def test_passes_order_id_to_kwargs(self) -> None:
-        flow, repo = _register_and_flow(FlowProvider)
-        order = DemoOrder()
-        order.id = "order-42"
-        shipment = await flow.create_shipment_from_order(order, "flow")
-        assert shipment.status == "created"

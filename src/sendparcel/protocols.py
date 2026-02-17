@@ -1,19 +1,6 @@
 """Framework integration protocols."""
 
-from decimal import Decimal
 from typing import Protocol, runtime_checkable
-
-from sendparcel.types import AddressInfo, ParcelInfo
-
-
-@runtime_checkable
-class Order(Protocol):
-    """Order shape expected by sendparcel core."""
-
-    def get_total_weight(self) -> Decimal: ...
-    def get_parcels(self) -> list[ParcelInfo]: ...
-    def get_sender_address(self) -> AddressInfo: ...
-    def get_receiver_address(self) -> AddressInfo: ...
 
 
 @runtime_checkable

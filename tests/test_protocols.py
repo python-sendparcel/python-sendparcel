@@ -1,22 +1,6 @@
 """Protocol tests."""
 
-from decimal import Decimal
-
-from sendparcel.protocols import Order, Shipment
-
-
-class DemoOrder:
-    def get_total_weight(self) -> Decimal:
-        return Decimal("1.0")
-
-    def get_parcels(self):
-        return []
-
-    def get_sender_address(self):
-        return {}
-
-    def get_receiver_address(self):
-        return {}
+from sendparcel.protocols import Shipment
 
 
 class DemoShipment:
@@ -29,5 +13,4 @@ class DemoShipment:
 
 
 def test_runtime_protocol_checks() -> None:
-    assert isinstance(DemoOrder(), Order)
     assert isinstance(DemoShipment(), Shipment)

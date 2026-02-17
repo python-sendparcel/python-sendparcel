@@ -12,7 +12,7 @@ from sendparcel.fsm import (
     STATUS_TO_CALLBACK,
     create_shipment_machine,
 )
-from sendparcel.protocols import Order, Shipment, ShipmentRepository
+from sendparcel.protocols import Shipment, ShipmentRepository
 from sendparcel.registry import registry
 from sendparcel.types import AddressInfo, ParcelInfo
 from sendparcel.validators import run_validators
@@ -67,24 +67,6 @@ class ShipmentFlow:
             if shipment.may_trigger("confirm_label"):  # ty: ignore[unresolved-attribute]  # dynamic FSM trigger guard
                 shipment.confirm_label()  # ty: ignore[unresolved-attribute]  # dynamic FSM trigger
         return await self.repository.save(shipment)
-
-    async def create_shipment_from_order(
-        self,
-        order: Order,
-        provider_slug: str,
-        **kwargs,
-    ) -> Shipment:
-        """Convenience: create a shipment from an Order object."""
-        order_id = getattr(order, "id", None)
-        if order_id is not None:
-            kwargs.setdefault("order_id", str(order_id))
-        return await self.create_shipment(
-            provider_slug,
-            sender_address=order.get_sender_address(),
-            receiver_address=order.get_receiver_address(),
-            parcels=order.get_parcels(),
-            **kwargs,
-        )
 
     async def create_label(self, shipment: Shipment, **kwargs) -> Shipment:
         """Create provider label and persist shipment."""

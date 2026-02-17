@@ -35,7 +35,7 @@ See the {doc}`installation-matrix` for version requirements and compatibility.
 python-sendparcel is built around four ideas:
 
 Protocols
-: `Order`, `Shipment`, and `ShipmentRepository` are `@runtime_checkable`
+: `Shipment` and `ShipmentRepository` are `@runtime_checkable`
   protocols defined in `sendparcel.protocols`. You implement them with your own
   classes (dataclasses, Django models, SQLAlchemy models, etc.) — the library
   never forces a particular ORM or persistence layer.
@@ -66,40 +66,10 @@ Finite state machine
 
 ## Minimal working example
 
-The example below implements the three protocols and uses `ShipmentFlow` with
+The example below implements the two protocols and uses `ShipmentFlow` with
 the built-in `DummyProvider` to create a shipment.
 
-### 1. Implement the Order protocol
-
-```python
-from dataclasses import dataclass, field
-from decimal import Decimal
-
-from sendparcel.types import AddressInfo, ParcelInfo
-
-
-@dataclass
-class MyOrder:
-    """Satisfies the sendparcel Order protocol."""
-
-    sender: AddressInfo
-    receiver: AddressInfo
-    parcels: list[ParcelInfo] = field(default_factory=list)
-
-    def get_total_weight(self) -> Decimal:
-        return sum(p["weight_kg"] for p in self.parcels)
-
-    def get_parcels(self) -> list[ParcelInfo]:
-        return self.parcels
-
-    def get_sender_address(self) -> AddressInfo:
-        return self.sender
-
-    def get_receiver_address(self) -> AddressInfo:
-        return self.receiver
-```
-
-### 2. Implement the Shipment and ShipmentRepository protocols
+### 1. Implement the Shipment and ShipmentRepository protocols
 
 ```python
 from dataclasses import dataclass
@@ -110,7 +80,6 @@ class MyShipment:
     """Satisfies the sendparcel Shipment protocol."""
 
     id: str
-    order: MyOrder
     status: str = ""
     provider: str = ""
     external_id: str = ""
@@ -133,7 +102,6 @@ class InMemoryRepository:
         shipment_id = str(self._counter)
         shipment = MyShipment(
             id=shipment_id,
-            order=kwargs["order"],
             status=kwargs.get("status", ""),
             provider=kwargs.get("provider", ""),
         )
@@ -152,7 +120,7 @@ class InMemoryRepository:
         return shipment
 ```
 
-### 3. Create a shipment with ShipmentFlow
+### 2. Create a shipment with ShipmentFlow
 
 ```python
 import anyio
