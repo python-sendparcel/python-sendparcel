@@ -1,7 +1,7 @@
 """Base provider abstraction."""
 
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.protocols import Shipment
@@ -21,6 +21,7 @@ class BaseProvider(ABC):
     supported_services: ClassVar[list[str]] = []
     confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.PUSH
     user_selectable: ClassVar[bool] = True
+    config_schema: ClassVar[dict[str, Any]] = {}
 
     def __init__(self, shipment: Shipment, config: dict | None = None) -> None:
         self.shipment = shipment
