@@ -357,10 +357,10 @@ provided by separate packages:
 
 | Package | Type | Repository |
 |---|---|---|
-| [python-sendparcel-inpost](https://github.com/sendparcel/python-sendparcel-inpost) | Provider — InPost ShipX (locker & courier) | `sendparcel/python-sendparcel-inpost` |
-| [django-sendparcel](https://github.com/sendparcel/django-sendparcel) | Framework adapter — Django | `sendparcel/django-sendparcel` |
-| [fastapi-sendparcel](https://github.com/sendparcel/fastapi-sendparcel) | Framework adapter — FastAPI | `sendparcel/fastapi-sendparcel` |
-| [litestar-sendparcel](https://github.com/sendparcel/litestar-sendparcel) | Framework adapter — Litestar | `sendparcel/litestar-sendparcel` |
+| [python-sendparcel-inpost](https://github.com/python-sendparcel/python-sendparcel-inpost) | Provider — InPost ShipX (locker & courier) | `python-sendparcel/python-sendparcel-inpost` |
+| [django-sendparcel](https://github.com/python-sendparcel/django-sendparcel) | Framework adapter — Django | `python-sendparcel/django-sendparcel` |
+| [fastapi-sendparcel](https://github.com/python-sendparcel/fastapi-sendparcel) | Framework adapter — FastAPI | `python-sendparcel/fastapi-sendparcel` |
+| [litestar-sendparcel](https://github.com/python-sendparcel/litestar-sendparcel) | Framework adapter — Litestar | `python-sendparcel/litestar-sendparcel` |
 
 Each framework wrapper provides framework-native models, views/routes, and
 repository implementations so you don't have to write the boilerplate shown in

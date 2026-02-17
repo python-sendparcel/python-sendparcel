@@ -30,9 +30,9 @@ native models, views/routes, and repository implementations:
 
 | Package | Framework |
 |---|---|
-| [django-sendparcel](https://github.com/sendparcel/django-sendparcel) | Django |
-| [fastapi-sendparcel](https://github.com/sendparcel/fastapi-sendparcel) | FastAPI |
-| [litestar-sendparcel](https://github.com/sendparcel/litestar-sendparcel) | Litestar |
+| [django-sendparcel](https://github.com/python-sendparcel/django-sendparcel) | Django |
+| [fastapi-sendparcel](https://github.com/python-sendparcel/fastapi-sendparcel) | FastAPI |
+| [litestar-sendparcel](https://github.com/python-sendparcel/litestar-sendparcel) | Litestar |
 
 Install adapters via extras: `pip install python-sendparcel[django]`,
 `[fastapi]`, `[litestar]`, `[frameworks]`, or `[all]`.
