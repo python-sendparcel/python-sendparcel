@@ -12,7 +12,8 @@ class AddressInfo(TypedDict, total=False):
 
     Common patterns:
     - Generic: name + line1 + city + postal_code + country_code
-    - InPost:  first_name + last_name + street + building_number + city + postal_code + country_code
+    - InPost:  first_name + last_name + street + building_number
+               + city + postal_code + country_code
     """
 
     # Generic / legacy fields
