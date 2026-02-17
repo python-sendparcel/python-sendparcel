@@ -1,6 +1,6 @@
 [project]
 name = "python-sendparcel"
-version = "0.1.0"
+version = "0.1.1"
 description = "Framework-agnostic parcel shipping core for Python."
 readme = "README.md"
 license = { text = "MIT" }
@@ -35,7 +35,9 @@ django = ["django-sendparcel>=0.1.0"]
 fastapi = ["fastapi-sendparcel>=0.1.0"]
 litestar = ["litestar-sendparcel>=0.1.0"]
 inpost = ["python-sendparcel-inpost>=0.1.0"]
-providers = []
+dpdpl = ["python-sendparcel-dpdpl>=0.1.0"]
+cli = ["python-sendparcel-cli>=0.1.0"]
+providers = ["python-sendparcel-inpost>=0.1.0", "python-sendparcel-dpdpl>=0.1.0"]
 frameworks = [
   "django-sendparcel>=0.1.0",
   "fastapi-sendparcel>=0.1.0",
@@ -45,6 +47,9 @@ all = [
   "django-sendparcel>=0.1.0",
   "fastapi-sendparcel>=0.1.0",
   "litestar-sendparcel>=0.1.0",
+  "python-sendparcel-inpost>=0.1.0",
+  "python-sendparcel-dpdpl>=0.1.0",
+  "python-sendparcel-cli>=0.1.0",
 ]
 
 [project.urls]
@@ -96,6 +101,8 @@ django-sendparcel = { path = "../django-sendparcel", editable = true }
 fastapi-sendparcel = { path = "../fastapi-sendparcel", editable = true }
 litestar-sendparcel = { path = "../litestar-sendparcel", editable = true }
 python-sendparcel-inpost = { path = "../python-sendparcel-inpost", editable = true }
+python-sendparcel-dpdpl = { path = "../python-sendparcel-dpdpl", editable = true }
+python-sendparcel-cli = { path = "../python-sendparcel-cli", editable = true }
 
 [tool.coverage.run]
 branch = true
