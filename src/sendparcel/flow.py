@@ -14,6 +14,7 @@ from sendparcel.fsm import (
 )
 from sendparcel.protocols import Order, Shipment, ShipmentRepository
 from sendparcel.registry import registry
+from sendparcel.types import AddressInfo, ParcelInfo
 from sendparcel.validators import run_validators
 
 
@@ -32,21 +33,30 @@ class ShipmentFlow:
 
     async def create_shipment(
         self,
-        order: Order,
         provider_slug: str,
+        *,
+        sender_address: AddressInfo,
+        receiver_address: AddressInfo,
+        parcels: list[ParcelInfo],
         **kwargs,
     ) -> Shipment:
-        """Create a shipment record for an order."""
+        """Create a shipment record with explicit address and parcel data."""
         registry.get_by_slug(provider_slug)
         shipment = await self.repository.create(
-            order=order,
             provider=provider_slug,
             status=ShipmentStatus.NEW,
             **kwargs,
         )
         create_shipment_machine(shipment)
         provider = self._get_provider(shipment)
-        result = await self._call_provider(provider.create_shipment(**kwargs))
+        result = await self._call_provider(
+            provider.create_shipment(
+                sender_address=sender_address,
+                receiver_address=receiver_address,
+                parcels=parcels,
+                **kwargs,
+            )
+        )
         shipment.external_id = result.get("external_id", "")
         shipment.tracking_number = result.get("tracking_number", "")
         self._trigger(shipment, "confirm_created")
@@ -57,6 +67,24 @@ class ShipmentFlow:
             if shipment.may_trigger("confirm_label"):  # ty: ignore[unresolved-attribute]  # dynamic FSM trigger guard
                 shipment.confirm_label()  # ty: ignore[unresolved-attribute]  # dynamic FSM trigger
         return await self.repository.save(shipment)
+
+    async def create_shipment_from_order(
+        self,
+        order: Order,
+        provider_slug: str,
+        **kwargs,
+    ) -> Shipment:
+        """Convenience: create a shipment from an Order object."""
+        order_id = getattr(order, "id", None)
+        if order_id is not None:
+            kwargs.setdefault("order_id", str(order_id))
+        return await self.create_shipment(
+            provider_slug,
+            sender_address=order.get_sender_address(),
+            receiver_address=order.get_receiver_address(),
+            parcels=order.get_parcels(),
+            **kwargs,
+        )
 
     async def create_label(self, shipment: Shipment, **kwargs) -> Shipment:
         """Create provider label and persist shipment."""

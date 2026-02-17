@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 
 import pytest
@@ -57,7 +57,6 @@ class DemoShipment:
     """Configurable shipment protocol implementation for tests."""
 
     id: str = "shipment-1"
-    order: DemoOrder = field(default_factory=DemoOrder)
     status: str = "new"
     provider: str = ""
     external_id: str = ""
@@ -79,7 +78,6 @@ class InMemoryRepository:
 
     async def create(self, **kwargs) -> DemoShipment:
         shipment = DemoShipment(
-            order=kwargs["order"],
             provider=kwargs["provider"],
             status=kwargs.get("status", "new"),
         )

@@ -164,8 +164,9 @@ class InMemoryRepository:
 
 ```python
 import anyio
+from decimal import Decimal
 
-from sendparcel import ShipmentFlow, ShipmentStatus
+from sendparcel import ShipmentFlow
 from sendparcel.types import AddressInfo, ParcelInfo
 
 
@@ -173,15 +174,17 @@ async def main():
     repo = InMemoryRepository()
     flow = ShipmentFlow(repository=repo)
 
-    order = MyOrder(
-        sender=AddressInfo(
+    # Create shipment using the built-in dummy provider
+    shipment = await flow.create_shipment(
+        "dummy",
+        sender_address=AddressInfo(
             name="Sender Co.",
             line1="ul. Marszalkowska 1",
             city="Warszawa",
             postal_code="00-001",
             country_code="PL",
         ),
-        receiver=AddressInfo(
+        receiver_address=AddressInfo(
             name="Jan Kowalski",
             line1="ul. Dluga 10",
             city="Gdansk",
@@ -190,9 +193,6 @@ async def main():
         ),
         parcels=[ParcelInfo(weight_kg=Decimal("2.5"))],
     )
-
-    # Create shipment using the built-in dummy provider
-    shipment = await flow.create_shipment(order, provider_slug="dummy")
     print(shipment.status)           # "created" or "label_ready"
     print(shipment.external_id)      # "dummy-1"
     print(shipment.tracking_number)  # "DUMMY-1"
@@ -280,11 +280,12 @@ class MyCarrierProvider(BaseProvider):
     supported_countries: ClassVar[list[str]] = ["PL", "DE"]
     supported_services: ClassVar[list[str]] = ["standard"]
 
-    async def create_shipment(self, **kwargs) -> ShipmentCreateResult:
+    async def create_shipment(
+        self, *, sender_address, receiver_address, parcels, **kwargs
+    ) -> ShipmentCreateResult:
         # Call your carrier's API here
         api_key = self.get_setting("api_key")
-        sender = self.shipment.order.get_sender_address()
-        receiver = self.shipment.order.get_receiver_address()
+        # sender_address, receiver_address, parcels are passed directly
         # ... HTTP call to carrier API ...
         return ShipmentCreateResult(
             external_id="carrier-12345",

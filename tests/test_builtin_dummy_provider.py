@@ -1,11 +1,36 @@
 """Built-in dummy provider tests -- comprehensive coverage."""
 
+from decimal import Decimal
+
 import pytest
 
 from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import InvalidCallbackError
 from sendparcel.fsm import create_shipment_machine
 from sendparcel.providers.dummy import DummyProvider
+from sendparcel.types import AddressInfo, ParcelInfo
+
+_SENDER = AddressInfo(
+    name="Test Sender",
+    line1="Sender St 1",
+    city="Warsaw",
+    postal_code="00-001",
+    country_code="PL",
+)
+_RECEIVER = AddressInfo(
+    name="Test Receiver",
+    line1="Receiver St 2",
+    city="Berlin",
+    postal_code="10115",
+    country_code="DE",
+)
+_PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
+
+
+def _create_kwargs():
+    return dict(
+        sender_address=_SENDER, receiver_address=_RECEIVER, parcels=_PARCELS
+    )
 
 
 class DummyShipment:
@@ -13,7 +38,6 @@ class DummyShipment:
 
     def __init__(self, shipment_id="s-42", status=ShipmentStatus.CREATED):
         self.id = shipment_id
-        self.order = None
         self.status = status
         self.provider = "dummy"
         self.external_id = ""
@@ -25,21 +49,21 @@ class TestCreateShipment:
     @pytest.mark.asyncio
     async def test_returns_deterministic_ids(self) -> None:
         provider = DummyProvider(DummyShipment(), config={})
-        result = await provider.create_shipment()
+        result = await provider.create_shipment(**_create_kwargs())
         assert result["external_id"] == "dummy-s-42"
         assert result["tracking_number"] == "DUMMY-S-42"
 
     @pytest.mark.asyncio
     async def test_different_shipment_id_gives_different_result(self) -> None:
         provider = DummyProvider(DummyShipment(shipment_id="s-99"), config={})
-        result = await provider.create_shipment()
+        result = await provider.create_shipment(**_create_kwargs())
         assert result["external_id"] == "dummy-s-99"
         assert result["tracking_number"] == "DUMMY-S-99"
 
     @pytest.mark.asyncio
     async def test_result_is_typed(self) -> None:
         provider = DummyProvider(DummyShipment(), config={})
-        result = await provider.create_shipment()
+        result = await provider.create_shipment(**_create_kwargs())
         assert isinstance(result, dict)
         assert "external_id" in result
 
@@ -181,5 +205,5 @@ class TestLatencySimulation:
     async def test_latency_does_not_crash(self) -> None:
         """With zero latency, operations complete immediately."""
         provider = DummyProvider(DummyShipment(), config={"latency_seconds": 0})
-        result = await provider.create_shipment()
+        result = await provider.create_shipment(**_create_kwargs())
         assert result["external_id"]

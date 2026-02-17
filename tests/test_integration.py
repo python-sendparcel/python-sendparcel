@@ -1,19 +1,44 @@
 """Flow integration tests."""
 
+from decimal import Decimal
+
 import pytest
 
-from conftest import DemoOrder, InMemoryRepository
+from conftest import InMemoryRepository
 from sendparcel.exceptions import CommunicationError, InvalidCallbackError
 from sendparcel.flow import ShipmentFlow
 from sendparcel.provider import BaseProvider
 from sendparcel.registry import registry
+from sendparcel.types import AddressInfo, ParcelInfo
+
+# ---------------------------------------------------------------------------
+# Default test data
+# ---------------------------------------------------------------------------
+
+_SENDER = AddressInfo(
+    name="Test Sender",
+    line1="Sender St 1",
+    city="Warsaw",
+    postal_code="00-001",
+    country_code="PL",
+)
+_RECEIVER = AddressInfo(
+    name="Test Receiver",
+    line1="Receiver St 2",
+    city="Berlin",
+    postal_code="10115",
+    country_code="DE",
+)
+_PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
 
 
 class IntegrationProvider(BaseProvider):
     slug = "integration"
     display_name = "Integration Provider"
 
-    async def create_shipment(self, **kwargs):
+    async def create_shipment(
+        self, *, sender_address, receiver_address, parcels, **kwargs
+    ):
         return {"external_id": "int-1", "tracking_number": "trk-int-1"}
 
     async def create_label(self, **kwargs):
@@ -86,8 +111,21 @@ class CommunicationErrorProvider(BaseProvider):
     slug = "comm-error"
     display_name = "Communication Error Provider"
 
-    async def create_shipment(self, **kwargs):
+    async def create_shipment(
+        self, *, sender_address, receiver_address, parcels, **kwargs
+    ):
         raise RuntimeError("Connection refused")
+
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+
+def _create_shipment_kwargs():
+    return dict(
+        sender_address=_SENDER, receiver_address=_RECEIVER, parcels=_PARCELS
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +139,9 @@ async def test_full_flow_create_label_callback() -> None:
     registry.register(IntegrationProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "integration")
+    shipment = await flow.create_shipment(
+        "integration", **_create_shipment_kwargs()
+    )
     shipment = await flow.create_label(shipment)
     shipment = await flow.handle_callback(
         shipment,
@@ -126,7 +166,9 @@ async def test_cancellation_at_created_state() -> None:
     registry.register(CancellableProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "cancellable")
+    shipment = await flow.create_shipment(
+        "cancellable", **_create_shipment_kwargs()
+    )
     assert shipment.status == "created"
 
     cancelled = await flow.cancel_shipment(shipment)
@@ -142,7 +184,9 @@ async def test_cancel_rejected_by_provider() -> None:
     registry.register(IntegrationProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "integration")
+    shipment = await flow.create_shipment(
+        "integration", **_create_shipment_kwargs()
+    )
     assert shipment.status == "created"
 
     cancelled = await flow.cancel_shipment(shipment)
@@ -158,7 +202,9 @@ async def test_failure_at_in_transit_state() -> None:
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "full-lifecycle")
+    shipment = await flow.create_shipment(
+        "full-lifecycle", **_create_shipment_kwargs()
+    )
     shipment = await flow.handle_callback(
         shipment, data={"event": "picked_up"}, headers={}
     )
@@ -180,7 +226,9 @@ async def test_callback_with_invalid_signature() -> None:
     registry.register(RejectingCallbackProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "rejecting-callback")
+    shipment = await flow.create_shipment(
+        "rejecting-callback", **_create_shipment_kwargs()
+    )
     original_status = shipment.status
 
     with pytest.raises(InvalidCallbackError, match="Invalid signature"):
@@ -198,7 +246,9 @@ async def test_return_after_delivery() -> None:
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "full-lifecycle")
+    shipment = await flow.create_shipment(
+        "full-lifecycle", **_create_shipment_kwargs()
+    )
     shipment = await flow.handle_callback(
         shipment, data={"event": "picked_up"}, headers={}
     )
@@ -224,7 +274,9 @@ async def test_fetch_and_update_status_poll_flow() -> None:
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "full-lifecycle")
+    shipment = await flow.create_shipment(
+        "full-lifecycle", **_create_shipment_kwargs()
+    )
     assert shipment.status == "created"
 
     # FullLifecycleProvider.fetch_shipment_status -> "in_transit"
@@ -243,7 +295,7 @@ async def test_provider_create_shipment_communication_error() -> None:
     flow = ShipmentFlow(repository=repository)
 
     with pytest.raises(CommunicationError) as exc_info:
-        await flow.create_shipment(DemoOrder(), "comm-error")
+        await flow.create_shipment("comm-error", **_create_shipment_kwargs())
 
     assert "Connection refused" in str(exc_info.value)
     assert exc_info.value.context["original_error"] == "RuntimeError"
@@ -256,7 +308,9 @@ async def test_full_lifecycle_create_label_transit_deliver_return() -> None:
     registry.register(FullLifecycleProvider)
     flow = ShipmentFlow(repository=repository)
 
-    shipment = await flow.create_shipment(DemoOrder(), "full-lifecycle")
+    shipment = await flow.create_shipment(
+        "full-lifecycle", **_create_shipment_kwargs()
+    )
     assert shipment.status == "created"
     assert shipment.external_id == "int-1"
     assert shipment.tracking_number == "trk-int-1"

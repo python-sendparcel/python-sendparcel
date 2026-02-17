@@ -21,7 +21,6 @@ class Shipment(Protocol):
     """Shipment shape expected by sendparcel core."""
 
     id: str
-    order: Order
     status: str
     provider: str
     external_id: str

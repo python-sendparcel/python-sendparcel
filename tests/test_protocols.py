@@ -21,7 +21,6 @@ class DemoOrder:
 
 class DemoShipment:
     id = "s-1"
-    order = DemoOrder()
     status = "new"
     provider = "dummy"
     external_id = ""

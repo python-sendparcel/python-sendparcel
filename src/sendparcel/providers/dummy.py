@@ -8,7 +8,9 @@ from sendparcel.exceptions import InvalidCallbackError
 from sendparcel.fsm import STATUS_TO_CALLBACK
 from sendparcel.provider import BaseProvider
 from sendparcel.types import (
+    AddressInfo,
     LabelInfo,
+    ParcelInfo,
     ShipmentCreateResult,
     ShipmentStatusResponse,
 )
@@ -30,7 +32,14 @@ class DummyProvider(BaseProvider):
         delay = float(self.get_setting("latency_seconds", 0.0))
         await anyio.sleep(delay)
 
-    async def create_shipment(self, **kwargs) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: AddressInfo,
+        receiver_address: AddressInfo,
+        parcels: list[ParcelInfo],
+        **kwargs,
+    ) -> ShipmentCreateResult:
         await self._simulate_latency()
         shipment_id = str(self.shipment.id)
         return ShipmentCreateResult(

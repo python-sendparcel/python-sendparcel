@@ -6,7 +6,9 @@ from typing import Any, ClassVar
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.protocols import Shipment
 from sendparcel.types import (
+    AddressInfo,
     LabelInfo,
+    ParcelInfo,
     ShipmentCreateResult,
     ShipmentStatusResponse,
 )
@@ -32,7 +34,14 @@ class BaseProvider(ABC):
         return self.config.get(name, default)
 
     @abstractmethod
-    async def create_shipment(self, **kwargs) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: AddressInfo,
+        receiver_address: AddressInfo,
+        parcels: list[ParcelInfo],
+        **kwargs,
+    ) -> ShipmentCreateResult:
         """Create shipment in provider API."""
 
     async def create_label(self, **kwargs) -> LabelInfo:

@@ -14,7 +14,9 @@ class MinimalProvider(BaseProvider):
     slug = "minimal"
     display_name = "Minimal"
 
-    async def create_shipment(self, **kwargs):
+    async def create_shipment(
+        self, *, sender_address, receiver_address, parcels, **kwargs
+    ):
         return {"external_id": "ex-1", "tracking_number": "trk-1"}
 
 
@@ -75,7 +77,9 @@ class TestConfigSchema:
                 },
             }
 
-            async def create_shipment(self, **kwargs) -> ShipmentCreateResult:
+            async def create_shipment(
+                self, *, sender_address, receiver_address, parcels, **kwargs
+            ) -> ShipmentCreateResult:
                 return ShipmentCreateResult(external_id="test-1")
 
         assert TestProvider.config_schema["api_key"]["required"] is True
@@ -87,7 +91,9 @@ class TestConfigSchema:
             slug = "minimal"
             display_name = "Minimal"
 
-            async def create_shipment(self, **kwargs) -> ShipmentCreateResult:
+            async def create_shipment(
+                self, *, sender_address, receiver_address, parcels, **kwargs
+            ) -> ShipmentCreateResult:
                 return ShipmentCreateResult(external_id="m-1")
 
         assert MinimalProvider.config_schema == {}
