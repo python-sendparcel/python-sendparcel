@@ -1,7 +1,25 @@
-"""Shipment state machine definitions."""
+"""Shipment state machine definitions.
+
+Triggers:
+- confirm_created: NEW → CREATED
+- confirm_label: CREATED → LABEL_READY (requires label_url)
+- mark_in_transit: CREATED|LABEL_READY → IN_TRANSIT (requires tracking_number)
+- mark_out_for_delivery: IN_TRANSIT → OUT_FOR_DELIVERY
+- mark_delivered: IN_TRANSIT|OUT_FOR_DELIVERY → DELIVERED
+- mark_returned: IN_TRANSIT|OUT_FOR_DELIVERY|DELIVERED → RETURNED
+- cancel: NEW|CREATED|LABEL_READY → CANCELLED
+- fail: NEW|CREATED|LABEL_READY|IN_TRANSIT|OUT_FOR_DELIVERY → FAILED
+  (also used for callback retry exhaustion)
+
+Retry Exhaustion:
+When callback retries are exhausted, transition to FAILED via the "fail" trigger.
+This reuses the existing failure pathway — no new status needed.
+"""
+
+from typing import Any
 
 from transitions import Machine
-from transitions.core import MachineError
+from transitions.core import EventData, MachineError
 
 from sendparcel.enums import ShipmentStatus
 
@@ -17,7 +35,7 @@ CALLBACK_NAMES = (
 )
 
 
-def _require_label_url(event_data):
+def _require_label_url(event_data: EventData) -> None:
     """Guard: reject confirm_label if shipment has no label_url."""
     model = event_data.model
     if not getattr(model, "label_url", ""):
@@ -27,7 +45,7 @@ def _require_label_url(event_data):
         )
 
 
-def _require_tracking_number(event_data):
+def _require_tracking_number(event_data: EventData) -> None:
     """Guard: reject mark_in_transit if shipment has no tracking_number."""
     model = event_data.model
     if not getattr(model, "tracking_number", ""):
@@ -113,7 +131,7 @@ STATUS_TO_CALLBACK: dict[str, str] = {
 }
 
 
-def create_shipment_machine(shipment) -> Machine:
+def create_shipment_machine(shipment: Any) -> Machine:
     """Attach shipment FSM to shipment object."""
     initial = (
         ShipmentStatus(shipment.status)
@@ -123,7 +141,7 @@ def create_shipment_machine(shipment) -> Machine:
     return Machine(
         model=shipment,
         states=ShipmentStatus,
-        transitions=SHIPMENT_TRANSITIONS,
+        transitions=SHIPMENT_TRANSITIONS,  # type: ignore[arg-type]  # transitions library expects complex union type
         initial=initial,
         model_attribute="status",
         auto_transitions=False,

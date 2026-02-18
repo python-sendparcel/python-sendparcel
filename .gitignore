@@ -25,6 +25,7 @@ dist/
 # IDE
 .vscode/
 .idea/
+.sisyphus/
 
 # OS
 .DS_Store

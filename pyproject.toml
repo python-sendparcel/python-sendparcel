@@ -110,3 +110,14 @@ source = ["sendparcel"]
 
 [tool.coverage.report]
 show_missing = true
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true

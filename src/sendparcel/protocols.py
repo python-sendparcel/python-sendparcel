@@ -1,6 +1,6 @@
 """Framework integration protocols."""
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -20,8 +20,8 @@ class ShipmentRepository(Protocol):
     """Persistence abstraction for adapters."""
 
     async def get_by_id(self, shipment_id: str) -> Shipment: ...
-    async def create(self, **kwargs) -> Shipment: ...
+    async def create(self, **kwargs: Any) -> Shipment: ...
     async def save(self, shipment: Shipment) -> Shipment: ...
     async def update_status(
-        self, shipment_id: str, status: str, **fields
+        self, shipment_id: str, status: str, **fields: Any
     ) -> Shipment: ...

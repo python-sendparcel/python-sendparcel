@@ -3,6 +3,8 @@
 from decimal import Decimal
 from typing import TypedDict
 
+from sendparcel.enums import LabelFormat
+
 
 class AddressInfo(TypedDict, total=False):
     """Address payload used by providers.
@@ -55,7 +57,7 @@ class ParcelInfo(_ParcelInfoRequired, total=False):
 class _LabelInfoRequired(TypedDict):
     """Required label fields."""
 
-    format: str
+    format: LabelFormat
 
 
 class LabelInfo(_LabelInfoRequired, total=False):

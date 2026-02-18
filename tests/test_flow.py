@@ -3,6 +3,8 @@
 from decimal import Decimal
 
 import httpx
+from typing import Any
+
 import pytest
 
 from conftest import InMemoryRepository
@@ -11,10 +13,23 @@ from sendparcel.exceptions import (
     InvalidCallbackError,
     InvalidTransitionError,
 )
+from sendparcel.enums import LabelFormat
 from sendparcel.flow import ShipmentFlow
-from sendparcel.provider import BaseProvider
+from sendparcel.provider import (
+    BaseProvider,
+    CancellableProvider,
+    LabelProvider,
+    PullStatusProvider,
+    PushCallbackProvider,
+)
 from sendparcel.registry import registry
-from sendparcel.types import AddressInfo, ParcelInfo
+from sendparcel.types import (
+    AddressInfo,
+    LabelInfo,
+    ParcelInfo,
+    ShipmentCreateResult,
+    ShipmentStatusResponse,
+)
 
 # ---------------------------------------------------------------------------
 # Default test data
@@ -41,45 +56,59 @@ _PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
 # ---------------------------------------------------------------------------
 
 
-class FlowProvider(BaseProvider):
+class FlowProvider(
+    BaseProvider,
+    LabelProvider,
+    PushCallbackProvider,
+    PullStatusProvider,
+    CancellableProvider,
+):
     slug = "flow"
     display_name = "Flow Provider"
 
-    async def create_shipment(
-        self, *, sender_address, receiver_address, parcels, **kwargs
-    ):
-        return {"external_id": "ext-123", "tracking_number": "trk-123"}
+    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+        return ShipmentCreateResult(
+            external_id="ext-123", tracking_number="trk-123"
+        )
 
-    async def create_label(self, **kwargs):
-        return {"format": "PDF", "url": "https://labels/123.pdf"}
+    async def create_label(self, **kwargs: Any) -> LabelInfo:
+        return LabelInfo(format=LabelFormat.PDF, url="https://labels/123.pdf")
 
-    async def verify_callback(self, data: dict, headers: dict, **kwargs):
+    async def verify_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
         pass  # Accept all callbacks in test
 
-    async def handle_callback(self, data: dict, headers: dict, **kwargs):
-        if self.shipment.may_trigger("mark_in_transit"):
-            self.shipment.mark_in_transit()
+    async def handle_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
+        if self.shipment.may_trigger("mark_in_transit"):  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
+            self.shipment.mark_in_transit()  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
 
-    async def fetch_shipment_status(self, **kwargs):
-        return {"status": self.get_setting("status_override")}
+    async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentStatusResponse:
+        return ShipmentStatusResponse(
+            status=self.get_setting("status_override")
+        )
 
-    async def cancel_shipment(self, **kwargs):
+    async def cancel_shipment(self, **kwargs: Any) -> bool:
         return True
 
 
-class FlowErrorProvider(BaseProvider):
+class FlowErrorProvider(BaseProvider, PushCallbackProvider):
     slug = "flow-error"
     display_name = "Flow Error Provider"
 
-    async def create_shipment(
-        self, *, sender_address, receiver_address, parcels, **kwargs
-    ):
+    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
         raise httpx.ConnectError("connection refused")
 
-    async def verify_callback(self, data, headers, **kwargs):
+    async def verify_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
         pass
 
-    async def handle_callback(self, data, headers, **kwargs):
+    async def handle_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
         pass
 
 
@@ -88,7 +117,7 @@ class FlowErrorProvider(BaseProvider):
 # ---------------------------------------------------------------------------
 
 
-def _register_and_flow(provider_cls, *, config=None, validators=None):
+def _register_and_flow(provider_cls: Any, *, config: Any = None, validators: Any = None) -> Any:
     """Register provider, return (flow, repository) tuple."""
     repository = InMemoryRepository()
     registry.register(provider_cls)
@@ -100,7 +129,7 @@ def _register_and_flow(provider_cls, *, config=None, validators=None):
     return flow, repository
 
 
-async def _created_shipment(flow, provider_slug="flow"):
+async def _created_shipment(flow: Any, provider_slug: str = "flow") -> Any:
     """Create and return a shipment in 'created' state."""
     return await flow.create_shipment(
         provider_slug,
@@ -151,14 +180,14 @@ class TestCreateShipment:
             slug = "label-incl"
             display_name = "Label Included"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {
-                    "external_id": "li-1",
-                    "tracking_number": "trk-li",
-                    "label": {"url": "https://labels/incl.pdf"},
-                }
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="li-1",
+                    tracking_number="trk-li",
+                    label=LabelInfo(
+                        format=LabelFormat.PDF, url="https://labels/incl.pdf"
+                    ),
+                )
 
         flow, _ = _register_and_flow(LabelIncludedProvider)
 
@@ -191,16 +220,16 @@ class TestCreateLabel:
 
     @pytest.mark.asyncio
     async def test_wraps_provider_error_in_communication_error(self) -> None:
-        class LabelErrorProvider(BaseProvider):
+        class LabelErrorProvider(BaseProvider, LabelProvider):
             slug = "label-err"
             display_name = "Label Error"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "le-1", "tracking_number": "trk-le"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="le-1", tracking_number="trk-le"
+                )
 
-            async def create_label(self, **kwargs):
+            async def create_label(self, **kwargs: Any) -> LabelInfo:
                 raise RuntimeError("label service unavailable")
 
         flow, _ = _register_and_flow(LabelErrorProvider)
@@ -213,7 +242,7 @@ class TestCreateLabel:
 
     @pytest.mark.asyncio
     async def test_failing_validator_raises(self) -> None:
-        def reject_all(data):
+        def reject_all(data: Any) -> None:
             raise ValueError("shipment rejected by validator")
 
         flow, _ = _register_and_flow(FlowProvider, validators=[reject_all])
@@ -224,16 +253,16 @@ class TestCreateLabel:
 
     @pytest.mark.asyncio
     async def test_wraps_httpx_error_in_communication_error(self) -> None:
-        class LabelHttpxErrorProvider(BaseProvider):
+        class LabelHttpxErrorProvider(BaseProvider, LabelProvider):
             slug = "label-httpx-err"
             display_name = "Label Httpx Error"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "lhe-1", "tracking_number": "trk-lhe"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="lhe-1", tracking_number="trk-lhe"
+                )
 
-            async def create_label(self, **kwargs):
+            async def create_label(self, **kwargs: Any) -> LabelInfo:
                 raise httpx.TimeoutException("label request timed out")
 
         flow, _ = _register_and_flow(LabelHttpxErrorProvider)
@@ -261,19 +290,23 @@ class TestHandleCallback:
 
     @pytest.mark.asyncio
     async def test_wraps_generic_provider_error(self) -> None:
-        class CallbackErrorProvider(BaseProvider):
+        class CallbackErrorProvider(BaseProvider, PushCallbackProvider):
             slug = "cb-err"
             display_name = "Callback Error"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "ce-1", "tracking_number": "trk-ce"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="ce-1", tracking_number="trk-ce"
+                )
 
-            async def verify_callback(self, data, headers, **kwargs):
+            async def verify_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 pass
 
-            async def handle_callback(self, data, headers, **kwargs):
+            async def handle_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 raise RuntimeError("callback processing failed")
 
         flow, _ = _register_and_flow(CallbackErrorProvider)
@@ -286,19 +319,23 @@ class TestHandleCallback:
 
     @pytest.mark.asyncio
     async def test_wraps_httpx_error(self) -> None:
-        class CallbackHttpxProvider(BaseProvider):
+        class CallbackHttpxProvider(BaseProvider, PushCallbackProvider):
             slug = "cb-httpx"
             display_name = "Callback Httpx"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "ch-1", "tracking_number": "trk-ch"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="ch-1", tracking_number="trk-ch"
+                )
 
-            async def verify_callback(self, data, headers, **kwargs):
+            async def verify_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 raise httpx.ReadTimeout("read timeout during callback verify")
 
-            async def handle_callback(self, data, headers, **kwargs):
+            async def handle_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 pass
 
         flow, _ = _register_and_flow(CallbackHttpxProvider)
@@ -357,16 +394,16 @@ class TestFetchAndUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_wraps_provider_error(self) -> None:
-        class FetchErrorProvider(BaseProvider):
+        class FetchErrorProvider(BaseProvider, PullStatusProvider):
             slug = "fetch-err"
             display_name = "Fetch Error"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "fe-1", "tracking_number": "trk-fe"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="fe-1", tracking_number="trk-fe"
+                )
 
-            async def fetch_shipment_status(self, **kwargs):
+            async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentStatusResponse:
                 raise httpx.ConnectError("status endpoint down")
 
         flow, _ = _register_and_flow(FetchErrorProvider)
@@ -396,16 +433,16 @@ class TestCancelShipment:
     async def test_provider_returns_false_keeps_status(self) -> None:
         """When provider.cancel_shipment returns False, status unchanged."""
 
-        class NoCancelProvider(BaseProvider):
+        class NoCancelProvider(BaseProvider, CancellableProvider):
             slug = "no-cancel"
             display_name = "No Cancel"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "nc-1", "tracking_number": "trk-nc"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="nc-1", tracking_number="trk-nc"
+                )
 
-            async def cancel_shipment(self, **kwargs):
+            async def cancel_shipment(self, **kwargs: Any) -> bool:
                 return False
 
         flow, repository = _register_and_flow(NoCancelProvider)
@@ -422,16 +459,16 @@ class TestCancelShipment:
 
     @pytest.mark.asyncio
     async def test_wraps_provider_error(self) -> None:
-        class CancelErrorProvider(BaseProvider):
+        class CancelErrorProvider(BaseProvider, CancellableProvider):
             slug = "cancel-err"
             display_name = "Cancel Error"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "ce-1", "tracking_number": "trk-ce"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="ce-1", tracking_number="trk-ce"
+                )
 
-            async def cancel_shipment(self, **kwargs):
+            async def cancel_shipment(self, **kwargs: Any) -> bool:
                 raise RuntimeError("cancel endpoint crashed")
 
         flow, _ = _register_and_flow(CancelErrorProvider)
@@ -465,9 +502,7 @@ class TestErrorWrapping:
             slug = "broken"
             display_name = "Broken"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
                 raise RuntimeError("internal provider bug")
 
         flow, _ = _register_and_flow(BrokenProvider)
@@ -484,19 +519,23 @@ class TestErrorWrapping:
     async def test_sendparcel_exceptions_pass_through_unwrapped(self) -> None:
         """InvalidCallbackError should NOT be double-wrapped."""
 
-        class RejectingProvider(BaseProvider):
+        class RejectingProvider(BaseProvider, PushCallbackProvider):
             slug = "rejecting"
             display_name = "Rejecting"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "r-1", "tracking_number": "trk-r"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="r-1", tracking_number="trk-r"
+                )
 
-            async def verify_callback(self, data, headers, **kwargs):
+            async def verify_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 raise InvalidCallbackError("bad signature")
 
-            async def handle_callback(self, data, headers, **kwargs):
+            async def handle_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 pass
 
         flow, _ = _register_and_flow(RejectingProvider)
@@ -538,23 +577,29 @@ class TestResolveCallback:
     async def test_raw_callback_name_is_rejected(self) -> None:
         """'cancel' as status should fail, not be treated as callback."""
 
-        class RawCallbackProvider(BaseProvider):
+        class RawCallbackProvider(
+            BaseProvider, PushCallbackProvider, PullStatusProvider
+        ):
             slug = "raw-cb"
             display_name = "Raw Callback"
 
-            async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
-            ):
-                return {"external_id": "rc-1", "tracking_number": "trk-rc"}
+            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+                return ShipmentCreateResult(
+                    external_id="rc-1", tracking_number="trk-rc"
+                )
 
-            async def verify_callback(self, data, headers, **kwargs):
+            async def verify_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 pass
 
-            async def handle_callback(self, data, headers, **kwargs):
+            async def handle_callback(
+                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+            ) -> None:
                 pass
 
-            async def fetch_shipment_status(self, **kwargs):
-                return {"status": "cancel"}
+            async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentStatusResponse:
+                return ShipmentStatusResponse(status="cancel")
 
         flow, _ = _register_and_flow(RawCallbackProvider, config={"raw-cb": {}})
         shipment = await _created_shipment(flow, "raw-cb")

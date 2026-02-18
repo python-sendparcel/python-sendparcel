@@ -2,35 +2,38 @@
 
 import importlib
 
+from typing import Any
+
 import pytest
 
 from sendparcel.provider import BaseProvider
 from sendparcel.providers.dummy import DummyProvider
 from sendparcel.registry import PluginRegistry
+from sendparcel.types import ShipmentCreateResult
 
 
 class ProviderA(BaseProvider):
     slug = "a"
     display_name = "Provider A"
 
-    async def create_shipment(self, **kwargs):
-        return {}
+    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+        return ShipmentCreateResult(external_id="a-1")
 
 
 class ProviderB(BaseProvider):
     slug = "a"
     display_name = "Provider B"
 
-    async def create_shipment(self, **kwargs):
-        return {}
+    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+        return ShipmentCreateResult(external_id="b-1")
 
 
 class ProviderC(BaseProvider):
     slug = "c"
     display_name = "Provider C"
 
-    async def create_shipment(self, **kwargs):
-        return {}
+    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+        return ShipmentCreateResult(external_id="c-1")
 
 
 def test_register_get_unregister_cycle() -> None:
@@ -57,10 +60,10 @@ def test_register_duplicate_slug_raises() -> None:
 
 def test_discover_uses_entry_points(monkeypatch: pytest.MonkeyPatch) -> None:
     class EP:
-        def __init__(self, loaded) -> None:
+        def __init__(self, loaded: Any) -> None:
             self._loaded = loaded
 
-        def load(self):
+        def load(self) -> Any:
             return self._loaded
 
     registry_module = importlib.import_module("sendparcel.registry")
@@ -106,10 +109,10 @@ def test_entry_point_skips_non_baseprovider_class(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class EP:
-        def __init__(self, loaded) -> None:
+        def __init__(self, loaded: Any) -> None:
             self._loaded = loaded
 
-        def load(self):
+        def load(self) -> Any:
             return self._loaded
 
     class NotAProvider:
@@ -131,10 +134,10 @@ def test_entry_point_skips_non_class_objects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class EP:
-        def __init__(self, loaded) -> None:
+        def __init__(self, loaded: Any) -> None:
             self._loaded = loaded
 
-        def load(self):
+        def load(self) -> Any:
             return self._loaded
 
     registry_module = importlib.import_module("sendparcel.registry")
@@ -185,8 +188,8 @@ class HiddenProvider(BaseProvider):
     display_name = "Hidden Provider"
     user_selectable = False
 
-    async def create_shipment(self, **kwargs):
-        return {}
+    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+        return ShipmentCreateResult(external_id="hidden-1")
 
 
 def test_non_selectable_provider_excluded_from_get_choices() -> None:

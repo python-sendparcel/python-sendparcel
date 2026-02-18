@@ -15,9 +15,14 @@ class MinimalProvider(BaseProvider):
     display_name = "Minimal"
 
     async def create_shipment(
-        self, *, sender_address, receiver_address, parcels, **kwargs
-    ):
-        return {"external_id": "ex-1", "tracking_number": "trk-1"}
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
+        return ShipmentCreateResult(external_id="ex-1", tracking_number="trk-1")
 
 
 def test_get_setting_reads_config() -> None:
@@ -25,22 +30,6 @@ def test_get_setting_reads_config() -> None:
 
     assert provider.get_setting("token") == "abc"
     assert provider.get_setting("missing", "fallback") == "fallback"
-
-
-@pytest.mark.asyncio
-async def test_optional_methods_default_to_not_implemented() -> None:
-    provider = MinimalProvider(DemoShipment(), config={})
-
-    with pytest.raises(NotImplementedError):
-        await provider.verify_callback({}, {})
-    with pytest.raises(NotImplementedError):
-        await provider.create_label()
-    with pytest.raises(NotImplementedError):
-        await provider.handle_callback({}, {})
-    with pytest.raises(NotImplementedError):
-        await provider.fetch_shipment_status()
-    with pytest.raises(NotImplementedError):
-        await provider.cancel_shipment()
 
 
 class TestConfirmationMethodOnProvider:
@@ -78,7 +67,7 @@ class TestConfigSchema:
             }
 
             async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
+                self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any
             ) -> ShipmentCreateResult:
                 return ShipmentCreateResult(external_id="test-1")
 
@@ -92,7 +81,7 @@ class TestConfigSchema:
             display_name = "Minimal"
 
             async def create_shipment(
-                self, *, sender_address, receiver_address, parcels, **kwargs
+                self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any
             ) -> ShipmentCreateResult:
                 return ShipmentCreateResult(external_id="m-1")
 

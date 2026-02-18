@@ -2,9 +2,10 @@
 
 from decimal import Decimal
 
+from typing import Any
+
 import pytest
 
-from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import InvalidCallbackError
 from sendparcel.fsm import create_shipment_machine
 from sendparcel.providers.dummy import DummyProvider
@@ -27,7 +28,7 @@ _RECEIVER = AddressInfo(
 _PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
 
 
-def _create_kwargs():
+def _create_kwargs() -> dict[str, Any]:
     return dict(
         sender_address=_SENDER, receiver_address=_RECEIVER, parcels=_PARCELS
     )
@@ -36,7 +37,7 @@ def _create_kwargs():
 class DummyShipment:
     """Shipment for dummy provider tests with FSM support."""
 
-    def __init__(self, shipment_id="s-42", status=ShipmentStatus.CREATED):
+    def __init__(self, shipment_id: str = "s-42", status: str = "created") -> None:
         self.id = shipment_id
         self.status = status
         self.provider = "dummy"
@@ -129,54 +130,54 @@ class TestVerifyCallback:
 class TestHandleCallback:
     @pytest.mark.asyncio
     async def test_applies_status_transition(self) -> None:
-        shipment = DummyShipment(status=ShipmentStatus.CREATED)
+        shipment = DummyShipment(status="created")
         shipment.tracking_number = "TRK-1"
         create_shipment_machine(shipment)
         provider = DummyProvider(shipment, config={})
 
         await provider.handle_callback({"status": "in_transit"}, headers={})
-        assert shipment.status == ShipmentStatus.IN_TRANSIT
+        assert shipment.status == "in_transit"
 
     @pytest.mark.asyncio
     async def test_ignores_empty_status(self) -> None:
-        shipment = DummyShipment(status=ShipmentStatus.CREATED)
+        shipment = DummyShipment(status="created")
         create_shipment_machine(shipment)
         provider = DummyProvider(shipment, config={})
 
         await provider.handle_callback({"status": ""}, headers={})
-        assert shipment.status == ShipmentStatus.CREATED
+        assert shipment.status == "created"
 
     @pytest.mark.asyncio
     async def test_ignores_missing_status(self) -> None:
-        shipment = DummyShipment(status=ShipmentStatus.CREATED)
+        shipment = DummyShipment(status="created")
         create_shipment_machine(shipment)
         provider = DummyProvider(shipment, config={})
 
         await provider.handle_callback({}, headers={})
-        assert shipment.status == ShipmentStatus.CREATED
+        assert shipment.status == "created"
 
     @pytest.mark.asyncio
     async def test_ignores_invalid_transition(self) -> None:
         """Callback with invalid transition does not raise or crash."""
-        shipment = DummyShipment(status=ShipmentStatus.CREATED)
+        shipment = DummyShipment(status="created")
         create_shipment_machine(shipment)
         provider = DummyProvider(shipment, config={})
 
         await provider.handle_callback({"status": "delivered"}, headers={})
-        assert shipment.status == ShipmentStatus.CREATED
+        assert shipment.status == "created"
 
 
 class TestFetchShipmentStatus:
     @pytest.mark.asyncio
     async def test_returns_current_status(self) -> None:
-        shipment = DummyShipment(status=ShipmentStatus.IN_TRANSIT)
+        shipment = DummyShipment(status="in_transit")
         provider = DummyProvider(shipment, config={})
         response = await provider.fetch_shipment_status()
-        assert response["status"] == ShipmentStatus.IN_TRANSIT
+        assert response["status"] == "in_transit"
 
     @pytest.mark.asyncio
     async def test_status_override_config(self) -> None:
-        shipment = DummyShipment(status=ShipmentStatus.CREATED)
+        shipment = DummyShipment(status="created")
         provider = DummyProvider(
             shipment, config={"status_override": "delivered"}
         )

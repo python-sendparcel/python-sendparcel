@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
+from sendparcel.exceptions import ShipmentNotFoundError
+from sendparcel.protocols import Shipment
 from sendparcel.registry import registry
 
 
@@ -26,15 +29,15 @@ class InMemoryRepository:
     """Minimal async repository used by flow tests."""
 
     def __init__(self) -> None:
-        self._store: dict[str, DemoShipment] = {}
+        self._store: dict[str, Shipment] = {}
         self.save_count: int = 0
 
-    async def get_by_id(self, shipment_id: str) -> DemoShipment:
+    async def get_by_id(self, shipment_id: str) -> Shipment:
         if shipment_id not in self._store:
-            raise KeyError(f"Shipment {shipment_id!r} not found")
+            raise ShipmentNotFoundError(shipment_id)
         return self._store[shipment_id]
 
-    async def create(self, **kwargs) -> DemoShipment:
+    async def create(self, **kwargs: Any) -> Shipment:
         shipment = DemoShipment(
             provider=kwargs["provider"],
             status=kwargs.get("status", "new"),
@@ -42,14 +45,14 @@ class InMemoryRepository:
         self._store[shipment.id] = shipment
         return shipment
 
-    async def save(self, shipment: DemoShipment) -> DemoShipment:
+    async def save(self, shipment: Shipment) -> Shipment:
         self._store[shipment.id] = shipment
         self.save_count += 1
         return shipment
 
     async def update_status(
-        self, shipment_id: str, status: str, **fields
-    ) -> DemoShipment:
+        self, shipment_id: str, status: str, **fields: Any
+    ) -> Shipment:
         shipment = self._store.get(shipment_id, DemoShipment(id=shipment_id))
         shipment.status = status
         for key, value in fields.items():

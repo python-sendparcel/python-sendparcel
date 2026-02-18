@@ -17,6 +17,15 @@ class ShipmentStatus(StrEnum):
     RETURNED = "returned"
 
 
+class LabelFormat(StrEnum):
+    """Shipping label format."""
+
+    PDF = "PDF"
+    ZPL = "ZPL"
+    PNG = "PNG"
+    EPL = "EPL"
+
+
 class ConfirmationMethod(StrEnum):
     """How the provider confirms shipment status updates."""
 

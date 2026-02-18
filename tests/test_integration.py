@@ -2,14 +2,29 @@
 
 from decimal import Decimal
 
+from typing import Any
+
 import pytest
 
 from conftest import InMemoryRepository
 from sendparcel.exceptions import CommunicationError, InvalidCallbackError
 from sendparcel.flow import ShipmentFlow
-from sendparcel.provider import BaseProvider
+from sendparcel.provider import (
+    BaseProvider,
+    CancellableProvider as CancellableTrait,
+    LabelProvider,
+    PullStatusProvider,
+    PushCallbackProvider,
+)
 from sendparcel.registry import registry
-from sendparcel.types import AddressInfo, ParcelInfo
+from sendparcel.types import (
+    AddressInfo,
+    LabelInfo,
+    ParcelInfo,
+    ShipmentCreateResult,
+    ShipmentStatusResponse,
+)
+from sendparcel.enums import LabelFormat
 
 # ---------------------------------------------------------------------------
 # Default test data
@@ -32,31 +47,50 @@ _RECEIVER = AddressInfo(
 _PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
 
 
-class IntegrationProvider(BaseProvider):
+class IntegrationProvider(
+    BaseProvider,
+    LabelProvider,
+    PushCallbackProvider,
+    PullStatusProvider,
+    CancellableTrait,
+):
     slug = "integration"
     display_name = "Integration Provider"
 
     async def create_shipment(
-        self, *, sender_address, receiver_address, parcels, **kwargs
-    ):
-        return {"external_id": "int-1", "tracking_number": "trk-int-1"}
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
+        return ShipmentCreateResult(
+            external_id="int-1", tracking_number="trk-int-1"
+        )
 
-    async def create_label(self, **kwargs):
-        return {"format": "PDF", "url": "https://labels/int.pdf"}
+    async def create_label(self, **kwargs: Any) -> LabelInfo:
+        return LabelInfo(format=LabelFormat.PDF, url="https://labels/int.pdf")
 
-    async def verify_callback(self, data: dict, headers: dict, **kwargs):
+    async def verify_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
         pass  # Accept all callbacks in test
 
-    async def handle_callback(self, data: dict, headers: dict, **kwargs):
-        if data.get("event") == "picked_up" and self.shipment.may_trigger(
+    async def handle_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
+        if data.get("event") == "picked_up" and self.shipment.may_trigger(  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
             "mark_in_transit"
         ):
-            self.shipment.mark_in_transit()
+            self.shipment.mark_in_transit()  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
 
-    async def fetch_shipment_status(self, **kwargs):
-        return {"status": "in_transit"}
+    async def fetch_shipment_status(
+        self, **kwargs: Any
+    ) -> ShipmentStatusResponse:
+        return ShipmentStatusResponse(status="in_transit")
 
-    async def cancel_shipment(self, **kwargs):
+    async def cancel_shipment(self, **kwargs: Any) -> bool:
         return False
 
 
@@ -66,7 +100,7 @@ class CancellableProvider(IntegrationProvider):
     slug = "cancellable"
     display_name = "Cancellable Provider"
 
-    async def cancel_shipment(self, **kwargs):
+    async def cancel_shipment(self, **kwargs: Any) -> bool:
         return True
 
 
@@ -76,7 +110,9 @@ class RejectingCallbackProvider(IntegrationProvider):
     slug = "rejecting-callback"
     display_name = "Rejecting Callback Provider"
 
-    async def verify_callback(self, data: dict, headers: dict, **kwargs):
+    async def verify_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
         raise InvalidCallbackError("Invalid signature")
 
 
@@ -86,7 +122,9 @@ class FullLifecycleProvider(IntegrationProvider):
     slug = "full-lifecycle"
     display_name = "Full Lifecycle Provider"
 
-    async def handle_callback(self, data: dict, headers: dict, **kwargs):
+    async def handle_callback(
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+    ) -> None:
         event = data.get("event")
         transitions = {
             "picked_up": "mark_in_transit",
@@ -95,12 +133,14 @@ class FullLifecycleProvider(IntegrationProvider):
             "returned": "mark_returned",
             "failed": "fail",
         }
-        callback = transitions.get(event)
-        if callback and self.shipment.may_trigger(callback):
+        callback = transitions.get(str(event)) if event is not None else None
+        if callback and self.shipment.may_trigger(callback):  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
             getattr(self.shipment, callback)()
 
-    async def fetch_shipment_status(self, **kwargs):
-        return {"status": self._poll_status}
+    async def fetch_shipment_status(
+        self, **kwargs: Any
+    ) -> ShipmentStatusResponse:
+        return ShipmentStatusResponse(status=self._poll_status)
 
     _poll_status = "in_transit"
 
@@ -112,8 +152,13 @@ class CommunicationErrorProvider(BaseProvider):
     display_name = "Communication Error Provider"
 
     async def create_shipment(
-        self, *, sender_address, receiver_address, parcels, **kwargs
-    ):
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         raise RuntimeError("Connection refused")
 
 
@@ -122,7 +167,7 @@ class CommunicationErrorProvider(BaseProvider):
 # ---------------------------------------------------------------------------
 
 
-def _create_shipment_kwargs():
+def _create_shipment_kwargs() -> dict[str, Any]:
     return dict(
         sender_address=_SENDER, receiver_address=_RECEIVER, parcels=_PARCELS
     )

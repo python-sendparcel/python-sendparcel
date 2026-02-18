@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 
+from sendparcel.enums import LabelFormat
 from sendparcel.types import (
     AddressInfo,
     LabelInfo,
@@ -25,7 +26,7 @@ def test_core_types_shape_examples() -> None:
         "height_cm": Decimal("30"),
     }
     label: LabelInfo = {
-        "format": "PDF",
+        "format": LabelFormat.PDF,
         "url": "https://example.com/label.pdf",
     }
     result: ShipmentCreateResult = {
@@ -36,7 +37,7 @@ def test_core_types_shape_examples() -> None:
 
     assert address["country_code"] == "PL"
     assert parcel["weight_kg"] == Decimal("1.20")
-    assert result["label"]["format"] == "PDF"
+    assert result["label"]["format"] == LabelFormat.PDF
 
 
 class TestAddressInfoAllOptional:
@@ -112,10 +113,10 @@ class TestShipmentCreateResultRequired:
 
 class TestLabelInfoRequired:
     def test_format_is_required(self) -> None:
-        label: LabelInfo = {"format": "PDF"}
-        assert label["format"] == "PDF"
+        label: LabelInfo = {"format": LabelFormat.PDF}
+        assert label["format"] == LabelFormat.PDF
 
     def test_url_and_content_are_optional(self) -> None:
-        label: LabelInfo = {"format": "PDF"}
+        label: LabelInfo = {"format": LabelFormat.PDF}
         assert "url" not in label
         assert "content_base64" not in label

@@ -5,11 +5,12 @@ modify it, and return it. Raise an exception to reject.
 """
 
 from collections.abc import Callable
+from typing import Any
 
 
 def run_validators(
-    data: dict, validators: list[Callable] | None = None
-) -> dict:
+    data: dict[str, Any], validators: list[Callable[..., Any]] | None = None
+) -> dict[str, Any]:
     """Run a chain of validators on data.
 
     Each validator receives the data dict and must return it
