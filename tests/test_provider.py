@@ -2,8 +2,6 @@
 
 from typing import Any, ClassVar
 
-import pytest
-
 from conftest import DemoShipment
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.provider import BaseProvider
@@ -33,12 +31,12 @@ def test_get_setting_reads_config() -> None:
 
 
 class TestConfirmationMethodOnProvider:
-    def test_default_confirmation_method_is_push(self) -> None:
+    def test_default_confirmation_method_is_none(self) -> None:
         provider = MinimalProvider(DemoShipment(), config={})
-        assert provider.confirmation_method == ConfirmationMethod.PUSH
+        assert provider.confirmation_method == ConfirmationMethod.NONE
 
     def test_confirmation_method_is_class_var(self) -> None:
-        assert MinimalProvider.confirmation_method == ConfirmationMethod.PUSH
+        assert MinimalProvider.confirmation_method == ConfirmationMethod.NONE
 
 
 class TestConfigSchema:
@@ -67,7 +65,12 @@ class TestConfigSchema:
             }
 
             async def create_shipment(
-                self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any
+                self,
+                *,
+                sender_address: Any,
+                receiver_address: Any,
+                parcels: Any,
+                **kwargs: Any,
             ) -> ShipmentCreateResult:
                 return ShipmentCreateResult(external_id="test-1")
 
@@ -81,7 +84,12 @@ class TestConfigSchema:
             display_name = "Minimal"
 
             async def create_shipment(
-                self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any
+                self,
+                *,
+                sender_address: Any,
+                receiver_address: Any,
+                parcels: Any,
+                **kwargs: Any,
             ) -> ShipmentCreateResult:
                 return ShipmentCreateResult(external_id="m-1")
 

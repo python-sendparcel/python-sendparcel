@@ -12,7 +12,6 @@ class Shipment(Protocol):
     provider: str
     external_id: str
     tracking_number: str
-    label_url: str
 
 
 @runtime_checkable

@@ -22,7 +22,6 @@ class DemoShipment:
     provider: str = ""
     external_id: str = ""
     tracking_number: str = ""
-    label_url: str = ""
 
 
 class InMemoryRepository:
@@ -30,7 +29,8 @@ class InMemoryRepository:
 
     def __init__(self) -> None:
         self._store: dict[str, Shipment] = {}
-        self.save_count: int = 0
+        self.save_count = 0
+        self.create_count = 0
 
     async def get_by_id(self, shipment_id: str) -> Shipment:
         if shipment_id not in self._store:
@@ -38,9 +38,13 @@ class InMemoryRepository:
         return self._store[shipment_id]
 
     async def create(self, **kwargs: Any) -> Shipment:
+        self.create_count += 1
         shipment = DemoShipment(
+            id=str(kwargs.get("id", "shipment-1")),
             provider=kwargs["provider"],
             status=kwargs.get("status", "new"),
+            external_id=str(kwargs.get("external_id", "")),
+            tracking_number=str(kwargs.get("tracking_number", "")),
         )
         self._store[shipment.id] = shipment
         return shipment

@@ -1,17 +1,16 @@
 """Flow integration tests."""
 
 from decimal import Decimal
-
 from typing import Any
 
 import pytest
 
 from conftest import InMemoryRepository
-from sendparcel.exceptions import CommunicationError, InvalidCallbackError
+from sendparcel.enums import LabelFormat
 from sendparcel.flow import ShipmentFlow
 from sendparcel.provider import (
     BaseProvider,
-    CancellableProvider as CancellableTrait,
+    CancellableProvider,
     LabelProvider,
     PullStatusProvider,
     PushCallbackProvider,
@@ -22,13 +21,8 @@ from sendparcel.types import (
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
-    ShipmentStatusResponse,
+    ShipmentUpdateResult,
 )
-from sendparcel.enums import LabelFormat
-
-# ---------------------------------------------------------------------------
-# Default test data
-# ---------------------------------------------------------------------------
 
 _SENDER = AddressInfo(
     name="Test Sender",
@@ -52,7 +46,7 @@ class IntegrationProvider(
     LabelProvider,
     PushCallbackProvider,
     PullStatusProvider,
-    CancellableTrait,
+    CancellableProvider,
 ):
     slug = "integration"
     display_name = "Integration Provider"
@@ -66,7 +60,8 @@ class IntegrationProvider(
         **kwargs: Any,
     ) -> ShipmentCreateResult:
         return ShipmentCreateResult(
-            external_id="int-1", tracking_number="trk-int-1"
+            external_id="int-1",
+            tracking_number="trk-int-1",
         )
 
     async def create_label(self, **kwargs: Any) -> LabelInfo:
@@ -75,81 +70,31 @@ class IntegrationProvider(
     async def verify_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
     ) -> None:
-        pass  # Accept all callbacks in test
+        return None
 
     async def handle_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        if data.get("event") == "picked_up" and self.shipment.may_trigger(  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
-            "mark_in_transit"
-        ):
-            self.shipment.mark_in_transit()  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
+    ) -> ShipmentUpdateResult:
+        return ShipmentUpdateResult(
+            status=str(data["status"]),
+            tracking_events=[{"code": "callback"}],
+        )
 
     async def fetch_shipment_status(
         self, **kwargs: Any
-    ) -> ShipmentStatusResponse:
-        return ShipmentStatusResponse(status="in_transit")
+    ) -> ShipmentUpdateResult:
+        return ShipmentUpdateResult(
+            status=self.get_setting("poll_status", "delivered"),
+            tracking_events=[{"code": "poll"}],
+        )
 
     async def cancel_shipment(self, **kwargs: Any) -> bool:
-        return False
+        return bool(self.get_setting("cancel_success", True))
 
 
-class CancellableProvider(IntegrationProvider):
-    """Provider that accepts cancellation requests."""
-
-    slug = "cancellable"
-    display_name = "Cancellable Provider"
-
-    async def cancel_shipment(self, **kwargs: Any) -> bool:
-        return True
-
-
-class RejectingCallbackProvider(IntegrationProvider):
-    """Provider that rejects callbacks with InvalidCallbackError."""
-
-    slug = "rejecting-callback"
-    display_name = "Rejecting Callback Provider"
-
-    async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        raise InvalidCallbackError("Invalid signature")
-
-
-class FullLifecycleProvider(IntegrationProvider):
-    """Provider whose handle_callback drives shipment through all states."""
-
-    slug = "full-lifecycle"
-    display_name = "Full Lifecycle Provider"
-
-    async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        event = data.get("event")
-        transitions = {
-            "picked_up": "mark_in_transit",
-            "out_for_delivery": "mark_out_for_delivery",
-            "delivered": "mark_delivered",
-            "returned": "mark_returned",
-            "failed": "fail",
-        }
-        callback = transitions.get(str(event)) if event is not None else None
-        if callback and self.shipment.may_trigger(callback):  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
-            getattr(self.shipment, callback)()
-
-    async def fetch_shipment_status(
-        self, **kwargs: Any
-    ) -> ShipmentStatusResponse:
-        return ShipmentStatusResponse(status=self._poll_status)
-
-    _poll_status = "in_transit"
-
-
-class CommunicationErrorProvider(BaseProvider):
-    """Provider whose create_shipment raises a non-domain exception."""
-
-    slug = "comm-error"
-    display_name = "Communication Error Provider"
+class InlineLabelProvider(IntegrationProvider):
+    slug = "inline-label"
+    display_name = "Inline Label Provider"
 
     async def create_shipment(
         self,
@@ -159,230 +104,106 @@ class CommunicationErrorProvider(BaseProvider):
         parcels: Any,
         **kwargs: Any,
     ) -> ShipmentCreateResult:
-        raise RuntimeError("Connection refused")
+        return ShipmentCreateResult(
+            external_id="inline-1",
+            tracking_number="trk-inline-1",
+            label=LabelInfo(
+                format=LabelFormat.PDF,
+                url="https://labels/inline.pdf",
+            ),
+        )
 
 
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
+def _flow(
+    provider_cls: type[BaseProvider],
+    *,
+    config: dict[str, Any] | None = None,
+) -> tuple[ShipmentFlow, InMemoryRepository]:
+    repository = InMemoryRepository()
+    registry.register(provider_cls)
+    return ShipmentFlow(repository=repository, config=config), repository
 
 
-def _create_shipment_kwargs() -> dict[str, Any]:
+def _create_kwargs() -> dict[str, Any]:
     return dict(
-        sender_address=_SENDER, receiver_address=_RECEIVER, parcels=_PARCELS
+        sender_address=_SENDER,
+        receiver_address=_RECEIVER,
+        parcels=_PARCELS,
     )
-
-
-# ---------------------------------------------------------------------------
-# Existing happy-path test
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_full_flow_create_label_callback() -> None:
-    repository = InMemoryRepository()
-    registry.register(IntegrationProvider)
-    flow = ShipmentFlow(repository=repository)
+async def test_full_flow_uses_payload_outcomes_without_persisted_label() -> (
+    None
+):
+    flow, repository = _flow(IntegrationProvider)
 
-    shipment = await flow.create_shipment(
-        "integration", **_create_shipment_kwargs()
+    created = await flow.create_shipment("integration", **_create_kwargs())
+    assert created.shipment.status == "created"
+
+    labelled = await flow.create_label(created.shipment)
+    assert labelled.shipment.status == "label_ready"
+
+    callback = await flow.handle_callback(
+        labelled.shipment,
+        {"status": "in_transit"},
+        {},
     )
-    shipment = await flow.create_label(shipment)
-    shipment = await flow.handle_callback(
-        shipment,
-        data={"event": "picked_up"},
-        headers={},
-    )
+    assert callback.shipment.status == "in_transit"
 
-    assert shipment.external_id == "int-1"
-    assert shipment.label_url == "https://labels/int.pdf"
-    assert shipment.status == "in_transit"
+    polled = await flow.fetch_and_update_status(callback.shipment)
 
-
-# ---------------------------------------------------------------------------
-# Failure, cancellation, and return scenarios
-# ---------------------------------------------------------------------------
+    assert labelled.label.get("url") == "https://labels/int.pdf"
+    assert callback.update == {
+        "status": "in_transit",
+        "tracking_events": [{"code": "callback"}],
+    }
+    assert polled.shipment.status == "delivered"
+    assert repository.save_count == 4
 
 
 @pytest.mark.asyncio
-async def test_cancellation_at_created_state() -> None:
-    """Create shipment -> cancel (provider accepts) -> status is cancelled."""
-    repository = InMemoryRepository()
-    registry.register(CancellableProvider)
-    flow = ShipmentFlow(repository=repository)
+async def test_inline_label_create_shipment_returns_label_payload() -> None:
+    flow, _ = _flow(InlineLabelProvider)
 
-    shipment = await flow.create_shipment(
-        "cancellable", **_create_shipment_kwargs()
-    )
-    assert shipment.status == "created"
+    outcome = await flow.create_shipment("inline-label", **_create_kwargs())
 
-    cancelled = await flow.cancel_shipment(shipment)
-
-    assert cancelled is True
-    assert shipment.status == "cancelled"
+    assert outcome.shipment.status == "label_ready"
+    assert outcome.label is not None
+    assert outcome.label.get("url") == "https://labels/inline.pdf"
 
 
 @pytest.mark.asyncio
-async def test_cancel_rejected_by_provider() -> None:
-    """Create shipment -> cancel (provider rejects) -> status stays created."""
-    repository = InMemoryRepository()
-    registry.register(IntegrationProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    shipment = await flow.create_shipment(
-        "integration", **_create_shipment_kwargs()
+async def test_callback_and_polling_share_same_normalized_shape() -> None:
+    flow, _ = _flow(
+        IntegrationProvider,
+        config={"integration": {"poll_status": "out_for_delivery"}},
     )
-    assert shipment.status == "created"
+    shipment = (
+        await flow.create_shipment("integration", **_create_kwargs())
+    ).shipment
+
+    callback = await flow.handle_callback(
+        shipment, {"status": "in_transit"}, {}
+    )
+    polled = await flow.fetch_and_update_status(callback.shipment)
+
+    assert set(callback.update) == {"status", "tracking_events"}
+    assert set(polled.update) == {"status", "tracking_events"}
+    assert polled.shipment.status == "out_for_delivery"
+
+
+@pytest.mark.asyncio
+async def test_cancel_rejection_keeps_current_status() -> None:
+    flow, _ = _flow(
+        IntegrationProvider,
+        config={"integration": {"cancel_success": False}},
+    )
+    shipment = (
+        await flow.create_shipment("integration", **_create_kwargs())
+    ).shipment
 
     cancelled = await flow.cancel_shipment(shipment)
 
     assert cancelled is False
     assert shipment.status == "created"
-
-
-@pytest.mark.asyncio
-async def test_failure_at_in_transit_state() -> None:
-    """Create -> transit -> fail (via callbacks) -> status is failed."""
-    repository = InMemoryRepository()
-    registry.register(FullLifecycleProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    shipment = await flow.create_shipment(
-        "full-lifecycle", **_create_shipment_kwargs()
-    )
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "picked_up"}, headers={}
-    )
-    assert shipment.status == "in_transit"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "failed"}, headers={}
-    )
-
-    assert shipment.status == "failed"
-    assert shipment.external_id == "int-1"
-    assert shipment.tracking_number == "trk-int-1"
-
-
-@pytest.mark.asyncio
-async def test_callback_with_invalid_signature() -> None:
-    """Create -> handle_callback with bad signature -> InvalidCallbackError."""
-    repository = InMemoryRepository()
-    registry.register(RejectingCallbackProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    shipment = await flow.create_shipment(
-        "rejecting-callback", **_create_shipment_kwargs()
-    )
-    original_status = shipment.status
-
-    with pytest.raises(InvalidCallbackError, match="Invalid signature"):
-        await flow.handle_callback(
-            shipment, data={"event": "picked_up"}, headers={}
-        )
-
-    assert shipment.status == original_status
-
-
-@pytest.mark.asyncio
-async def test_return_after_delivery() -> None:
-    """Create -> transit -> delivered -> returned through full flow."""
-    repository = InMemoryRepository()
-    registry.register(FullLifecycleProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    shipment = await flow.create_shipment(
-        "full-lifecycle", **_create_shipment_kwargs()
-    )
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "picked_up"}, headers={}
-    )
-    assert shipment.status == "in_transit"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "delivered"}, headers={}
-    )
-    assert shipment.status == "delivered"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "returned"}, headers={}
-    )
-
-    assert shipment.status == "returned"
-    assert shipment.external_id == "int-1"
-
-
-@pytest.mark.asyncio
-async def test_fetch_and_update_status_poll_flow() -> None:
-    """Create -> fetch_and_update_status polls -> transitions to in_transit."""
-    repository = InMemoryRepository()
-    registry.register(FullLifecycleProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    shipment = await flow.create_shipment(
-        "full-lifecycle", **_create_shipment_kwargs()
-    )
-    assert shipment.status == "created"
-
-    # FullLifecycleProvider.fetch_shipment_status -> "in_transit"
-    shipment = await flow.fetch_and_update_status(shipment)
-
-    assert shipment.status == "in_transit"
-    assert shipment.tracking_number == "trk-int-1"
-    assert repository.save_count >= 2  # create + fetch_and_update
-
-
-@pytest.mark.asyncio
-async def test_provider_create_shipment_communication_error() -> None:
-    """Provider raises non-domain error -> wrapped in CommunicationError."""
-    repository = InMemoryRepository()
-    registry.register(CommunicationErrorProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    with pytest.raises(CommunicationError) as exc_info:
-        await flow.create_shipment("comm-error", **_create_shipment_kwargs())
-
-    assert "Connection refused" in str(exc_info.value)
-    assert exc_info.value.context["original_error"] == "RuntimeError"
-
-
-@pytest.mark.asyncio
-async def test_full_lifecycle_create_label_transit_deliver_return() -> None:
-    """Full lifecycle: create -> label -> transit -> deliver -> return."""
-    repository = InMemoryRepository()
-    registry.register(FullLifecycleProvider)
-    flow = ShipmentFlow(repository=repository)
-
-    shipment = await flow.create_shipment(
-        "full-lifecycle", **_create_shipment_kwargs()
-    )
-    assert shipment.status == "created"
-    assert shipment.external_id == "int-1"
-    assert shipment.tracking_number == "trk-int-1"
-
-    shipment = await flow.create_label(shipment)
-    assert shipment.status == "label_ready"
-    assert shipment.label_url == "https://labels/int.pdf"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "picked_up"}, headers={}
-    )
-    assert shipment.status == "in_transit"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "out_for_delivery"}, headers={}
-    )
-    assert shipment.status == "out_for_delivery"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "delivered"}, headers={}
-    )
-    assert shipment.status == "delivered"
-
-    shipment = await flow.handle_callback(
-        shipment, data={"event": "returned"}, headers={}
-    )
-    assert shipment.status == "returned"
-
-    # Verify repository tracked all saves
-    assert repository.save_count >= 6

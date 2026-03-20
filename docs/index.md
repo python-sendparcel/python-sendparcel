@@ -9,7 +9,7 @@ communication, and plugin discovery.
 
 ```{admonition} Alpha notice
 :class: warning
-This project is at version **0.1.0**. The public API may change between minor
+This project is at version **0.1.1**. The public API may change between minor
 releases until 1.0 is reached. Pin your dependency accordingly.
 ```
 
@@ -17,7 +17,7 @@ releases until 1.0 is reached. Pin your dependency accordingly.
 
 - **Provider plugin system** — register carriers via entry points or manually; auto-discovered at first use.
 - **Shipment domain types** — strict TypedDicts (`AddressInfo`, `ParcelInfo`, `LabelInfo`, and more).
-- **9-state finite state machine** — `NEW` through `DELIVERED`, plus `CANCELLED`, `FAILED`, and `RETURNED`, with guarded transitions.
+- **Explicit transition rules** — `NEW` through `DELIVERED`, plus `CANCELLED`, `FAILED`, and `RETURNED`, with core-owned status transitions.
 - **ShipmentFlow orchestrator** — async workflow for creating shipments, fetching labels, handling callbacks, polling status, and cancelling.
 - **Runtime protocols** — `Shipment` and `ShipmentRepository` are `@runtime_checkable`; bring your own models and persistence.
 - **Built-in DummyProvider** — deterministic reference provider for testing and local development.

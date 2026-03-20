@@ -1,25 +1,26 @@
 """Deterministic built-in dummy provider implementation."""
 
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
 import anyio
 
-from sendparcel.enums import LabelFormat
+from sendparcel.enums import ConfirmationMethod, LabelFormat
 from sendparcel.exceptions import InvalidCallbackError
-from sendparcel.fsm import STATUS_TO_CALLBACK
 from sendparcel.provider import (
     BaseProvider,
-    LabelProvider,
-    PushCallbackProvider,
-    PullStatusProvider,
     CancellableProvider,
+    LabelProvider,
+    PullStatusProvider,
+    PushCallbackProvider,
 )
 from sendparcel.types import (
     AddressInfo,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
-    ShipmentStatusResponse,
+    ShipmentUpdateResult,
 )
 
 
@@ -30,12 +31,13 @@ class DummyProvider(
     PullStatusProvider,
     CancellableProvider,
 ):
-    """Reference provider for local/dev/testing usage."""
+    """Reference provider for local, development, and test usage."""
 
     slug: ClassVar[str] = "dummy"
     display_name: ClassVar[str] = "Dummy"
     supported_countries: ClassVar[list[str]] = ["PL", "DE", "US"]
     supported_services: ClassVar[list[str]] = ["standard", "express"]
+    confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.PUSH
 
     def _label_url(self) -> str:
         base = self.get_setting("label_base_url", "https://dummy.local/labels")
@@ -74,26 +76,19 @@ class DummyProvider(
 
     async def handle_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
+    ) -> ShipmentUpdateResult:
         await self._simulate_latency()
         status_value = data.get("status")
         if not status_value:
-            return
-
-        callback = STATUS_TO_CALLBACK.get(str(status_value), str(status_value))
-        trigger = getattr(self.shipment, callback, None)
-        may_trigger = getattr(self.shipment, "may_trigger", None)
-        if trigger is None or may_trigger is None:
-            return
-        if may_trigger(callback):
-            trigger()
+            return ShipmentUpdateResult()
+        return ShipmentUpdateResult(status=str(status_value))
 
     async def fetch_shipment_status(
         self, **kwargs: Any
-    ) -> ShipmentStatusResponse:
+    ) -> ShipmentUpdateResult:
         await self._simulate_latency()
-        return ShipmentStatusResponse(
-            status=self.get_setting("status_override", self.shipment.status),
+        return ShipmentUpdateResult(
+            status=self.get_setting("status_override", self.shipment.status)
         )
 
     async def cancel_shipment(self, **kwargs: Any) -> bool:

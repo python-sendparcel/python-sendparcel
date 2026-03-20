@@ -1,5 +1,7 @@
 """Base provider abstraction and capability trait mixins."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
@@ -10,23 +12,18 @@ from sendparcel.types import (
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
-    ShipmentStatusResponse,
+    ShipmentUpdateResult,
 )
 
 
 class BaseProvider(ABC):
-    """Base class for parcel delivery providers.
-
-    This is the minimal required interface. Providers can extend with
-    capability traits (LabelProvider, PushCallbackProvider, etc.) to
-    declare additional supported operations.
-    """
+    """Base class for parcel delivery providers."""
 
     slug: ClassVar[str] = ""
     display_name: ClassVar[str] = ""
     supported_countries: ClassVar[list[str]] = []
     supported_services: ClassVar[list[str]] = []
-    confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.PUSH
+    confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.NONE
     user_selectable: ClassVar[bool] = True
     config_schema: ClassVar[dict[str, Any]] = {}
 
@@ -38,6 +35,7 @@ class BaseProvider(ABC):
 
     def get_setting(self, name: str, default: Any = None) -> Any:
         """Read provider setting from config."""
+
         return self.config.get(name, default)
 
     @abstractmethod
@@ -57,27 +55,23 @@ class LabelProvider(ABC):
 
     @abstractmethod
     async def create_label(self, **kwargs: Any) -> LabelInfo:
-        """Create/fetch label for shipment."""
+        """Create or fetch label payload for a shipment."""
 
 
 class PushCallbackProvider(ABC):
-    """Trait for providers that receive push notifications (webhooks)."""
+    """Trait for providers that receive push notifications."""
 
     @abstractmethod
     async def verify_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
     ) -> None:
-        """Verify callback authenticity.
-
-        Providers that accept callbacks MUST override this to validate
-        signatures/tokens. Raise InvalidCallbackError to reject.
-        """
+        """Verify callback authenticity."""
 
     @abstractmethod
     async def handle_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        """Apply callback updates to shipment."""
+    ) -> ShipmentUpdateResult:
+        """Normalize callback data into a shipment update payload."""
 
 
 class PullStatusProvider(ABC):
@@ -86,8 +80,8 @@ class PullStatusProvider(ABC):
     @abstractmethod
     async def fetch_shipment_status(
         self, **kwargs: Any
-    ) -> ShipmentStatusResponse:
-        """Fetch latest shipment status from provider."""
+    ) -> ShipmentUpdateResult:
+        """Fetch latest shipment update from provider."""
 
 
 class CancellableProvider(ABC):

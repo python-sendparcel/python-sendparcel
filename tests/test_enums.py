@@ -4,6 +4,9 @@ from sendparcel.enums import ConfirmationMethod, ShipmentStatus
 
 
 class TestConfirmationMethod:
+    def test_none_value(self) -> None:
+        assert ConfirmationMethod.NONE == "NONE"
+
     def test_push_value(self) -> None:
         assert ConfirmationMethod.PUSH == "PUSH"
 

@@ -1,11 +1,11 @@
 """Plugin registry tests."""
 
 import importlib
-
 from typing import Any
 
 import pytest
 
+from sendparcel.exceptions import ProviderNotFoundError
 from sendparcel.provider import BaseProvider
 from sendparcel.providers.dummy import DummyProvider
 from sendparcel.registry import PluginRegistry
@@ -16,7 +16,14 @@ class ProviderA(BaseProvider):
     slug = "a"
     display_name = "Provider A"
 
-    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         return ShipmentCreateResult(external_id="a-1")
 
 
@@ -24,7 +31,14 @@ class ProviderB(BaseProvider):
     slug = "a"
     display_name = "Provider B"
 
-    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         return ShipmentCreateResult(external_id="b-1")
 
 
@@ -32,7 +46,14 @@ class ProviderC(BaseProvider):
     slug = "c"
     display_name = "Provider C"
 
-    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         return ShipmentCreateResult(external_id="c-1")
 
 
@@ -46,7 +67,7 @@ def test_register_get_unregister_cycle() -> None:
 
     reg.unregister("a")
 
-    with pytest.raises(KeyError):
+    with pytest.raises(ProviderNotFoundError):
         reg.get_by_slug("a")
 
 
@@ -126,7 +147,7 @@ def test_entry_point_skips_non_baseprovider_class(
     reg = PluginRegistry()
     reg.discover()
 
-    with pytest.raises(KeyError):
+    with pytest.raises(ProviderNotFoundError):
         reg.get_by_slug("bad")
 
 
@@ -188,7 +209,14 @@ class HiddenProvider(BaseProvider):
     display_name = "Hidden Provider"
     user_selectable = False
 
-    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         return ShipmentCreateResult(external_id="hidden-1")
 
 
@@ -224,3 +252,25 @@ def test_non_selectable_provider_still_accessible_via_get_by_slug() -> None:
     reg.register(HiddenProvider)
 
     assert reg.get_by_slug("hidden") is HiddenProvider
+
+
+def test_empty_provider_slug_is_rejected() -> None:
+    class MissingSlugProvider(BaseProvider):
+        slug = ""
+        display_name = "Missing Slug"
+
+        async def create_shipment(
+            self,
+            *,
+            sender_address: Any,
+            receiver_address: Any,
+            parcels: Any,
+            **kwargs: Any,
+        ) -> ShipmentCreateResult:
+            return ShipmentCreateResult(external_id="missing")
+
+    reg = PluginRegistry()
+    reg._discovered = True
+
+    with pytest.raises(ValueError, match="non-empty slug"):
+        reg.register(MissingSlugProvider)

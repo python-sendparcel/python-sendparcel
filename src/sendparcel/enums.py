@@ -29,5 +29,6 @@ class LabelFormat(StrEnum):
 class ConfirmationMethod(StrEnum):
     """How the provider confirms shipment status updates."""
 
+    NONE = "NONE"
     PUSH = "PUSH"
     PULL = "PULL"

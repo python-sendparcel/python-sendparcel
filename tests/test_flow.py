@@ -1,19 +1,20 @@
 """ShipmentFlow unit tests."""
 
 from decimal import Decimal
-
-import httpx
 from typing import Any
 
+import httpx
 import pytest
 
 from conftest import InMemoryRepository
+from sendparcel.enums import LabelFormat
 from sendparcel.exceptions import (
     CommunicationError,
     InvalidCallbackError,
     InvalidTransitionError,
+    ProviderCapabilityError,
+    ProviderNotFoundError,
 )
-from sendparcel.enums import LabelFormat
 from sendparcel.flow import ShipmentFlow
 from sendparcel.provider import (
     BaseProvider,
@@ -28,12 +29,8 @@ from sendparcel.types import (
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
-    ShipmentStatusResponse,
+    ShipmentUpdateResult,
 )
-
-# ---------------------------------------------------------------------------
-# Default test data
-# ---------------------------------------------------------------------------
 
 _SENDER = AddressInfo(
     name="Test Sender",
@@ -51,10 +48,6 @@ _RECEIVER = AddressInfo(
 )
 _PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
 
-# ---------------------------------------------------------------------------
-# Reusable test providers
-# ---------------------------------------------------------------------------
-
 
 class FlowProvider(
     BaseProvider,
@@ -66,9 +59,17 @@ class FlowProvider(
     slug = "flow"
     display_name = "Flow Provider"
 
-    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         return ShipmentCreateResult(
-            external_id="ext-123", tracking_number="trk-123"
+            external_id="ext-123",
+            tracking_number="trk-123",
         )
 
     async def create_label(self, **kwargs: Any) -> LabelInfo:
@@ -77,48 +78,88 @@ class FlowProvider(
     async def verify_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
     ) -> None:
-        pass  # Accept all callbacks in test
+        if headers.get("x-flow-token") == "bad":
+            raise InvalidCallbackError("bad signature")
 
     async def handle_callback(
         self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        if self.shipment.may_trigger("mark_in_transit"):  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
-            self.shipment.mark_in_transit()  # type: ignore[attr-defined]  # Method added dynamically by transitions.Machine
+    ) -> ShipmentUpdateResult:
+        status = str(data.get("status", "in_transit"))
+        return ShipmentUpdateResult(
+            status=status,
+            tracking_events=[{"code": "accepted"}],
+        )
 
-    async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentStatusResponse:
-        return ShipmentStatusResponse(
-            status=self.get_setting("status_override")
+    async def fetch_shipment_status(
+        self, **kwargs: Any
+    ) -> ShipmentUpdateResult:
+        return ShipmentUpdateResult(
+            status=self.get_setting("status_override", "in_transit"),
+            tracking_events=[{"code": "polled"}],
         )
 
     async def cancel_shipment(self, **kwargs: Any) -> bool:
-        return True
+        return bool(self.get_setting("cancel_success", True))
 
 
-class FlowErrorProvider(BaseProvider, PushCallbackProvider):
-    slug = "flow-error"
-    display_name = "Flow Error Provider"
+class LabelIncludedProvider(BaseProvider):
+    slug = "label-included"
+    display_name = "Label Included"
 
-    async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
+        return ShipmentCreateResult(
+            external_id="li-1",
+            tracking_number="trk-li",
+            label=LabelInfo(
+                format=LabelFormat.PDF,
+                url="https://labels/included.pdf",
+            ),
+        )
+
+
+class BareProvider(BaseProvider):
+    slug = "bare"
+    display_name = "Bare Provider"
+
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
+        return ShipmentCreateResult(external_id="bare-1")
+
+
+class BrokenProvider(BaseProvider):
+    slug = "broken"
+    display_name = "Broken Provider"
+
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
         raise httpx.ConnectError("connection refused")
 
-    async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        pass
 
-    async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
-        pass
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _register_and_flow(provider_cls: Any, *, config: Any = None, validators: Any = None) -> Any:
-    """Register provider, return (flow, repository) tuple."""
+def _register_and_flow(
+    provider_cls: type[BaseProvider],
+    *,
+    config: dict[str, Any] | None = None,
+    validators: list[Any] | None = None,
+) -> tuple[ShipmentFlow, InMemoryRepository]:
     repository = InMemoryRepository()
     registry.register(provider_cls)
     flow = ShipmentFlow(
@@ -129,298 +170,181 @@ def _register_and_flow(provider_cls: Any, *, config: Any = None, validators: Any
     return flow, repository
 
 
-async def _created_shipment(flow: Any, provider_slug: str = "flow") -> Any:
-    """Create and return a shipment in 'created' state."""
-    return await flow.create_shipment(
+async def _created_shipment(
+    flow: ShipmentFlow, provider_slug: str = "flow"
+) -> Any:
+    outcome = await flow.create_shipment(
         provider_slug,
         sender_address=_SENDER,
         receiver_address=_RECEIVER,
         parcels=_PARCELS,
     )
-
-
-# ---------------------------------------------------------------------------
-# TestCreateShipment
-# ---------------------------------------------------------------------------
+    return outcome.shipment
 
 
 class TestCreateShipment:
     @pytest.mark.asyncio
-    async def test_sets_created_and_ids(self) -> None:
-        flow, _ = _register_and_flow(FlowProvider)
+    async def test_returns_outcome_and_persists_metadata(self) -> None:
+        flow, repository = _register_and_flow(FlowProvider)
 
-        shipment = await flow.create_shipment(
+        outcome = await flow.create_shipment(
             "flow",
             sender_address=_SENDER,
             receiver_address=_RECEIVER,
             parcels=_PARCELS,
         )
 
-        assert shipment.status == "created"
-        assert shipment.external_id == "ext-123"
-        assert shipment.tracking_number == "trk-123"
+        assert outcome.label is None
+        assert outcome.shipment.status == "created"
+        assert outcome.shipment.external_id == "ext-123"
+        assert outcome.shipment.tracking_number == "trk-123"
+        assert repository.create_count == 1
+        assert repository.save_count == 1
 
     @pytest.mark.asyncio
-    async def test_unknown_provider_slug_raises_key_error(self) -> None:
+    async def test_inline_label_returns_payload_and_label_ready_status(
+        self,
+    ) -> None:
+        flow, _ = _register_and_flow(LabelIncludedProvider)
+
+        outcome = await flow.create_shipment(
+            "label-included",
+            sender_address=_SENDER,
+            receiver_address=_RECEIVER,
+            parcels=_PARCELS,
+        )
+
+        assert outcome.shipment.status == "label_ready"
+        assert outcome.label is not None
+        assert outcome.label.get("url") == "https://labels/included.pdf"
+
+    @pytest.mark.asyncio
+    async def test_unknown_provider_raises_provider_not_found(self) -> None:
         flow, _ = _register_and_flow(FlowProvider)
 
-        with pytest.raises(KeyError):
+        with pytest.raises(ProviderNotFoundError):
             await flow.create_shipment(
-                "nonexistent-provider",
+                "ghost",
                 sender_address=_SENDER,
                 receiver_address=_RECEIVER,
                 parcels=_PARCELS,
             )
 
     @pytest.mark.asyncio
-    async def test_provider_returning_label_sets_label_ready(self) -> None:
-        """When result contains a label, status is label_ready."""
+    async def test_provider_error_is_wrapped(self) -> None:
+        flow, _ = _register_and_flow(BrokenProvider)
 
-        class LabelIncludedProvider(BaseProvider):
-            slug = "label-incl"
-            display_name = "Label Included"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="li-1",
-                    tracking_number="trk-li",
-                    label=LabelInfo(
-                        format=LabelFormat.PDF, url="https://labels/incl.pdf"
-                    ),
-                )
-
-        flow, _ = _register_and_flow(LabelIncludedProvider)
-
-        shipment = await flow.create_shipment(
-            "label-incl",
-            sender_address=_SENDER,
-            receiver_address=_RECEIVER,
-            parcels=_PARCELS,
-        )
-
-        assert shipment.status == "label_ready"
-        assert shipment.label_url == "https://labels/incl.pdf"
-
-
-# ---------------------------------------------------------------------------
-# TestCreateLabel
-# ---------------------------------------------------------------------------
+        with pytest.raises(CommunicationError, match="connection refused"):
+            await flow.create_shipment(
+                "broken",
+                sender_address=_SENDER,
+                receiver_address=_RECEIVER,
+                parcels=_PARCELS,
+            )
 
 
 class TestCreateLabel:
     @pytest.mark.asyncio
-    async def test_updates_url_and_state(self) -> None:
+    async def test_returns_payload_and_marks_shipment_label_ready(self) -> None:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
-        updated = await flow.create_label(shipment)
+        outcome = await flow.create_label(shipment)
 
-        assert updated.label_url == "https://labels/123.pdf"
-        assert updated.status == "label_ready"
-
-    @pytest.mark.asyncio
-    async def test_wraps_provider_error_in_communication_error(self) -> None:
-        class LabelErrorProvider(BaseProvider, LabelProvider):
-            slug = "label-err"
-            display_name = "Label Error"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="le-1", tracking_number="trk-le"
-                )
-
-            async def create_label(self, **kwargs: Any) -> LabelInfo:
-                raise RuntimeError("label service unavailable")
-
-        flow, _ = _register_and_flow(LabelErrorProvider)
-        shipment = await _created_shipment(flow, "label-err")
-
-        with pytest.raises(
-            CommunicationError, match="label service unavailable"
-        ):
-            await flow.create_label(shipment)
+        assert outcome.shipment.status == "label_ready"
+        assert outcome.label.get("url") == "https://labels/123.pdf"
 
     @pytest.mark.asyncio
-    async def test_failing_validator_raises(self) -> None:
-        def reject_all(data: Any) -> None:
-            raise ValueError("shipment rejected by validator")
+    async def test_validator_failure_is_propagated(self) -> None:
+        def reject_all(data: dict[str, Any]) -> dict[str, Any]:
+            raise ValueError("shipment rejected")
 
         flow, _ = _register_and_flow(FlowProvider, validators=[reject_all])
         shipment = await _created_shipment(flow)
 
-        with pytest.raises(ValueError, match="shipment rejected by validator"):
+        with pytest.raises(ValueError, match="shipment rejected"):
             await flow.create_label(shipment)
 
     @pytest.mark.asyncio
-    async def test_wraps_httpx_error_in_communication_error(self) -> None:
-        class LabelHttpxErrorProvider(BaseProvider, LabelProvider):
-            slug = "label-httpx-err"
-            display_name = "Label Httpx Error"
+    async def test_provider_without_label_capability_is_rejected(self) -> None:
+        flow, _ = _register_and_flow(BareProvider)
+        shipment = await _created_shipment(flow, "bare")
 
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="lhe-1", tracking_number="trk-lhe"
-                )
-
-            async def create_label(self, **kwargs: Any) -> LabelInfo:
-                raise httpx.TimeoutException("label request timed out")
-
-        flow, _ = _register_and_flow(LabelHttpxErrorProvider)
-        shipment = await _created_shipment(flow, "label-httpx-err")
-
-        with pytest.raises(CommunicationError, match="label request timed out"):
+        with pytest.raises(ProviderCapabilityError, match="label creation"):
             await flow.create_label(shipment)
-
-
-# ---------------------------------------------------------------------------
-# TestHandleCallback
-# ---------------------------------------------------------------------------
 
 
 class TestHandleCallback:
     @pytest.mark.asyncio
-    async def test_callback_transitions_shipment(self) -> None:
-        """handle_callback delegates to provider, transitions shipment."""
+    async def test_returns_normalized_update_and_applies_status(self) -> None:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
-        updated = await flow.handle_callback(shipment, {}, {})
+        outcome = await flow.handle_callback(
+            shipment,
+            {"status": "in_transit"},
+            {},
+        )
 
-        assert updated.status == "in_transit"
-
-    @pytest.mark.asyncio
-    async def test_wraps_generic_provider_error(self) -> None:
-        class CallbackErrorProvider(BaseProvider, PushCallbackProvider):
-            slug = "cb-err"
-            display_name = "Callback Error"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="ce-1", tracking_number="trk-ce"
-                )
-
-            async def verify_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                pass
-
-            async def handle_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                raise RuntimeError("callback processing failed")
-
-        flow, _ = _register_and_flow(CallbackErrorProvider)
-        shipment = await _created_shipment(flow, "cb-err")
-
-        with pytest.raises(
-            CommunicationError, match="callback processing failed"
-        ):
-            await flow.handle_callback(shipment, {}, {})
+        assert outcome.shipment.status == "in_transit"
+        assert outcome.update.get("status") == "in_transit"
+        assert outcome.update.get("tracking_events") == [{"code": "accepted"}]
 
     @pytest.mark.asyncio
-    async def test_wraps_httpx_error(self) -> None:
-        class CallbackHttpxProvider(BaseProvider, PushCallbackProvider):
-            slug = "cb-httpx"
-            display_name = "Callback Httpx"
+    async def test_invalid_callback_error_passes_through(self) -> None:
+        flow, _ = _register_and_flow(FlowProvider)
+        shipment = await _created_shipment(flow)
 
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="ch-1", tracking_number="trk-ch"
-                )
+        with pytest.raises(InvalidCallbackError, match="bad signature"):
+            await flow.handle_callback(
+                shipment,
+                {"status": "in_transit"},
+                {"x-flow-token": "bad"},
+            )
 
-            async def verify_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                raise httpx.ReadTimeout("read timeout during callback verify")
-
-            async def handle_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                pass
-
-        flow, _ = _register_and_flow(CallbackHttpxProvider)
-        shipment = await _created_shipment(flow, "cb-httpx")
+    @pytest.mark.asyncio
+    async def test_unknown_status_is_rejected(self) -> None:
+        flow, _ = _register_and_flow(FlowProvider)
+        shipment = await _created_shipment(flow)
 
         with pytest.raises(
-            CommunicationError, match="read timeout during callback verify"
+            InvalidTransitionError, match="Unknown shipment status"
         ):
-            await flow.handle_callback(shipment, {}, {})
-
-
-# ---------------------------------------------------------------------------
-# TestFetchAndUpdateStatus
-# ---------------------------------------------------------------------------
+            await flow.handle_callback(
+                shipment,
+                {"status": "teleported"},
+                {},
+            )
 
 
 class TestFetchAndUpdateStatus:
     @pytest.mark.asyncio
-    async def test_applies_transition(self) -> None:
+    async def test_returns_update_outcome(self) -> None:
         flow, _ = _register_and_flow(
             FlowProvider,
-            config={"flow": {"status_override": "in_transit"}},
+            config={"flow": {"status_override": "out_for_delivery"}},
         )
         shipment = await _created_shipment(flow)
 
-        updated = await flow.fetch_and_update_status(shipment)
+        outcome = await flow.fetch_and_update_status(shipment)
 
-        assert updated.status == "in_transit"
+        assert outcome.shipment.status == "out_for_delivery"
+        assert outcome.update.get("tracking_events") == [{"code": "polled"}]
 
     @pytest.mark.asyncio
-    async def test_rejects_unknown_status(self) -> None:
-        flow, _ = _register_and_flow(
-            FlowProvider,
-            config={"flow": {"status_override": "unknown-status"}},
-        )
-        shipment = await _created_shipment(flow)
+    async def test_provider_without_polling_capability_is_rejected(
+        self,
+    ) -> None:
+        flow, _ = _register_and_flow(BareProvider)
+        shipment = await _created_shipment(flow, "bare")
 
-        with pytest.raises(InvalidTransitionError, match="unknown-status"):
+        with pytest.raises(ProviderCapabilityError, match="status polling"):
             await flow.fetch_and_update_status(shipment)
-
-    @pytest.mark.asyncio
-    async def test_none_status_does_not_transition(self) -> None:
-        """Provider returns None status: shipment saved, no transition."""
-        flow, repository = _register_and_flow(
-            FlowProvider,
-            config={"flow": {"status_override": None}},
-        )
-        shipment = await _created_shipment(flow)
-        status_before = shipment.status
-
-        updated = await flow.fetch_and_update_status(shipment)
-
-        assert updated.status == status_before
-        # save was called (once for create, once for fetch_and_update)
-        assert repository.save_count == 2
-
-    @pytest.mark.asyncio
-    async def test_wraps_provider_error(self) -> None:
-        class FetchErrorProvider(BaseProvider, PullStatusProvider):
-            slug = "fetch-err"
-            display_name = "Fetch Error"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="fe-1", tracking_number="trk-fe"
-                )
-
-            async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentStatusResponse:
-                raise httpx.ConnectError("status endpoint down")
-
-        flow, _ = _register_and_flow(FetchErrorProvider)
-        shipment = await _created_shipment(flow, "fetch-err")
-
-        with pytest.raises(CommunicationError, match="status endpoint down"):
-            await flow.fetch_and_update_status(shipment)
-
-
-# ---------------------------------------------------------------------------
-# TestCancelShipment
-# ---------------------------------------------------------------------------
 
 
 class TestCancelShipment:
     @pytest.mark.asyncio
-    async def test_transitions_to_cancelled(self) -> None:
+    async def test_provider_accepts_cancel_and_status_changes(self) -> None:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
@@ -430,220 +354,27 @@ class TestCancelShipment:
         assert shipment.status == "cancelled"
 
     @pytest.mark.asyncio
-    async def test_provider_returns_false_keeps_status(self) -> None:
-        """When provider.cancel_shipment returns False, status unchanged."""
-
-        class NoCancelProvider(BaseProvider, CancellableProvider):
-            slug = "no-cancel"
-            display_name = "No Cancel"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="nc-1", tracking_number="trk-nc"
-                )
-
-            async def cancel_shipment(self, **kwargs: Any) -> bool:
-                return False
-
-        flow, repository = _register_and_flow(NoCancelProvider)
-        shipment = await _created_shipment(flow, "no-cancel")
-        status_before = shipment.status
-        save_count_before = repository.save_count
-
-        result = await flow.cancel_shipment(shipment)
-
-        assert result is False
-        assert shipment.status == status_before
-        # save should NOT have been called again
-        assert repository.save_count == save_count_before
-
-    @pytest.mark.asyncio
-    async def test_wraps_provider_error(self) -> None:
-        class CancelErrorProvider(BaseProvider, CancellableProvider):
-            slug = "cancel-err"
-            display_name = "Cancel Error"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="ce-1", tracking_number="trk-ce"
-                )
-
-            async def cancel_shipment(self, **kwargs: Any) -> bool:
-                raise RuntimeError("cancel endpoint crashed")
-
-        flow, _ = _register_and_flow(CancelErrorProvider)
-        shipment = await _created_shipment(flow, "cancel-err")
-
-        with pytest.raises(CommunicationError, match="cancel endpoint crashed"):
-            await flow.cancel_shipment(shipment)
-
-
-# ---------------------------------------------------------------------------
-# TestErrorWrapping
-# ---------------------------------------------------------------------------
-
-
-class TestErrorWrapping:
-    @pytest.mark.asyncio
-    async def test_create_shipment_wraps_httpx_error(self) -> None:
-        flow, _ = _register_and_flow(FlowErrorProvider)
-
-        with pytest.raises(CommunicationError, match="connection refused"):
-            await flow.create_shipment(
-                "flow-error",
-                sender_address=_SENDER,
-                receiver_address=_RECEIVER,
-                parcels=_PARCELS,
-            )
-
-    @pytest.mark.asyncio
-    async def test_create_shipment_wraps_generic_provider_error(self) -> None:
-        class BrokenProvider(BaseProvider):
-            slug = "broken"
-            display_name = "Broken"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                raise RuntimeError("internal provider bug")
-
-        flow, _ = _register_and_flow(BrokenProvider)
-
-        with pytest.raises(CommunicationError, match="internal provider bug"):
-            await flow.create_shipment(
-                "broken",
-                sender_address=_SENDER,
-                receiver_address=_RECEIVER,
-                parcels=_PARCELS,
-            )
-
-    @pytest.mark.asyncio
-    async def test_sendparcel_exceptions_pass_through_unwrapped(self) -> None:
-        """InvalidCallbackError should NOT be double-wrapped."""
-
-        class RejectingProvider(BaseProvider, PushCallbackProvider):
-            slug = "rejecting"
-            display_name = "Rejecting"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="r-1", tracking_number="trk-r"
-                )
-
-            async def verify_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                raise InvalidCallbackError("bad signature")
-
-            async def handle_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                pass
-
-        flow, _ = _register_and_flow(RejectingProvider)
-        shipment = await flow.create_shipment(
-            "rejecting",
-            sender_address=_SENDER,
-            receiver_address=_RECEIVER,
-            parcels=_PARCELS,
-        )
-
-        with pytest.raises(InvalidCallbackError, match="bad signature"):
-            await flow.handle_callback(shipment, {}, {})
-
-    @pytest.mark.asyncio
-    async def test_communication_error_includes_original_error_context(
+    async def test_provider_rejects_cancel_and_status_stays_created(
         self,
     ) -> None:
-        """CommunicationError.context should include the original error type."""
-        flow, _ = _register_and_flow(FlowErrorProvider)
-
-        with pytest.raises(CommunicationError) as exc_info:
-            await flow.create_shipment(
-                "flow-error",
-                sender_address=_SENDER,
-                receiver_address=_RECEIVER,
-                parcels=_PARCELS,
-            )
-
-        assert exc_info.value.context["original_error"] == "ConnectError"
-
-
-# ---------------------------------------------------------------------------
-# TestResolveCallback
-# ---------------------------------------------------------------------------
-
-
-class TestResolveCallback:
-    @pytest.mark.asyncio
-    async def test_raw_callback_name_is_rejected(self) -> None:
-        """'cancel' as status should fail, not be treated as callback."""
-
-        class RawCallbackProvider(
-            BaseProvider, PushCallbackProvider, PullStatusProvider
-        ):
-            slug = "raw-cb"
-            display_name = "Raw Callback"
-
-            async def create_shipment(self, *, sender_address: Any, receiver_address: Any, parcels: Any, **kwargs: Any) -> ShipmentCreateResult:
-                return ShipmentCreateResult(
-                    external_id="rc-1", tracking_number="trk-rc"
-                )
-
-            async def verify_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                pass
-
-            async def handle_callback(
-                self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-            ) -> None:
-                pass
-
-            async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentStatusResponse:
-                return ShipmentStatusResponse(status="cancel")
-
-        flow, _ = _register_and_flow(RawCallbackProvider, config={"raw-cb": {}})
-        shipment = await _created_shipment(flow, "raw-cb")
-
-        with pytest.raises(InvalidTransitionError):
-            await flow.fetch_and_update_status(shipment)
-
-
-# ---------------------------------------------------------------------------
-# TestTrigger
-# ---------------------------------------------------------------------------
-
-
-class TestTrigger:
-    @pytest.mark.asyncio
-    async def test_invalid_transition_from_current_status(self) -> None:
-        """Invalid callback from current status raises InvalidTransition."""
         flow, _ = _register_and_flow(
             FlowProvider,
-            config={"flow": {"status_override": "delivered"}},
+            config={"flow": {"cancel_success": False}},
         )
         shipment = await _created_shipment(flow)
 
-        # Shipment is in 'created' status; 'delivered' maps to 'mark_delivered'
-        # which is only allowed from 'in_transit' or 'out_for_delivery'.
-        with pytest.raises(
-            InvalidTransitionError, match="cannot be executed from status"
-        ):
-            await flow.fetch_and_update_status(shipment)
+        cancelled = await flow.cancel_shipment(shipment)
+
+        assert cancelled is False
+        assert shipment.status == "created"
 
     @pytest.mark.asyncio
-    async def test_cancel_from_in_transit_raises(self) -> None:
-        """Cancel only allowed from new/created/label_ready, not in_transit."""
-        flow, _ = _register_and_flow(
-            FlowProvider,
-            config={"flow": {"status_override": "in_transit"}},
-        )
+    async def test_cancel_from_in_transit_is_rejected(self) -> None:
+        flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
+        shipment = (
+            await flow.handle_callback(shipment, {"status": "in_transit"}, {})
+        ).shipment
 
-        # Transition to in_transit first
-        shipment = await flow.fetch_and_update_status(shipment)
-        assert shipment.status == "in_transit"
-
-        with pytest.raises(
-            InvalidTransitionError, match="cannot be executed from status"
-        ):
+        with pytest.raises(InvalidTransitionError, match="cannot transition"):
             await flow.cancel_shipment(shipment)

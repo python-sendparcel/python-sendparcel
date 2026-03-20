@@ -1,7 +1,10 @@
 """Provider plugin registry."""
 
+from __future__ import annotations
+
 from importlib.metadata import entry_points
 
+from sendparcel.exceptions import ProviderNotFoundError
 from sendparcel.provider import BaseProvider
 
 ENTRY_POINT_GROUP = "sendparcel.providers"
@@ -16,13 +19,13 @@ class PluginRegistry:
 
     def discover(self) -> None:
         """Load providers from entry points."""
+
         from sendparcel.providers import BUILTIN_PROVIDERS
 
         for provider_class in BUILTIN_PROVIDERS:
             self._register_provider(provider_class)
-        eps = entry_points(group=ENTRY_POINT_GROUP)
-        for ep in eps:
-            provider_class = ep.load()
+        for entry_point in entry_points(group=ENTRY_POINT_GROUP):
+            provider_class = entry_point.load()
             if isinstance(provider_class, type) and issubclass(
                 provider_class, BaseProvider
             ):
@@ -31,24 +34,31 @@ class PluginRegistry:
 
     def register(self, provider_class: type[BaseProvider]) -> None:
         """Register provider manually."""
+
         self._register_provider(provider_class)
 
     def unregister(self, slug: str) -> None:
         """Unregister provider by slug."""
+
         self._providers.pop(slug, None)
 
     def get_by_slug(self, slug: str) -> type[BaseProvider]:
         """Get provider class by slug."""
+
         self._ensure_discovered()
-        return self._providers[slug]
+        try:
+            return self._providers[slug]
+        except KeyError as exc:
+            raise ProviderNotFoundError(slug) from exc
 
     def get_choices(self) -> list[tuple[str, str]]:
         """Get provider slug/display pairs for user-facing selection."""
+
         self._ensure_discovered()
         return [
-            (p.slug, p.display_name)
-            for p in self._providers.values()
-            if p.user_selectable
+            (provider.slug, provider.display_name)
+            for provider in self._providers.values()
+            if provider.user_selectable
         ]
 
     def _ensure_discovered(self) -> None:
@@ -57,6 +67,8 @@ class PluginRegistry:
 
     def _register_provider(self, provider_class: type[BaseProvider]) -> None:
         slug = provider_class.slug
+        if not isinstance(slug, str) or not slug:
+            raise ValueError("Provider classes must declare a non-empty slug")
         existing = self._providers.get(slug)
         if existing is not None and existing is not provider_class:
             raise ValueError(

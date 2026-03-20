@@ -1,104 +1,52 @@
 # python-sendparcel
 
-[![PyPI](https://img.shields.io/pypi/v/python-sendparcel.svg)](https://pypi.org/project/python-sendparcel/)
-[![Python Version](https://img.shields.io/pypi/pyversions/python-sendparcel.svg)](https://pypi.org/project/python-sendparcel/)
-[![License](https://img.shields.io/pypi/l/python-sendparcel.svg)](https://pypi.org/project/python-sendparcel/)
-
 Framework-agnostic parcel shipping core for Python.
 
----
+> Alpha notice: `0.1.1` is still unstable. The API can change fast because the
+> ecosystem is still being cleaned up.
 
-> **Alpha notice** — This project is at version **0.1.0**. The public API
-> may change between minor releases until 1.0 is reached. Pin your
-> dependency accordingly.
+## What it is
 
-## Features
+- Provider-agnostic shipment orchestration with a single core flow.
+- Explicit shipment metadata persistence: `id`, `status`, `provider`, `external_id`, `tracking_number`.
+- Label payloads are operation results, not persisted shipment fields.
+- One normalized provider update contract for both callbacks and polling.
+- Runtime-checkable `Shipment` and `ShipmentRepository` protocols so adapters can use their own models.
 
-- **Provider plugin system** — register providers via entry points or manually; auto-discovery at first use.
-- **Shipment domain types** — `AddressInfo`, `ParcelInfo`, `LabelInfo`, `ShipmentCreateResult`, `ShipmentStatusResponse`, and `TrackingEvent` as strict TypedDicts.
-- **Finite state machine** — 9-state `ShipmentStatus` enum (`NEW` → `CREATED` → `LABEL_READY` → `IN_TRANSIT` → `OUT_FOR_DELIVERY` → `DELIVERED`, plus `CANCELLED`, `FAILED`, `RETURNED`) with guarded transitions powered by [transitions](https://github.com/pytransitions/transitions).
-- **ShipmentFlow orchestrator** — framework-agnostic async workflow for creating shipments, fetching labels, handling callbacks, polling status, and cancelling.
-- **BaseProvider ABC** — define your own provider by subclassing a single class with well-defined async methods.
-- **Built-in DummyProvider** — deterministic reference provider for testing and local development.
-- **Pluggable validators** — attach validator callables to `ShipmentFlow` for global or per-operation validation.
-- **Runtime protocols** — `Shipment` and `ShipmentRepository` are `@runtime_checkable` protocols; bring your own models and persistence.
-- **Async-first** — the entire runtime is async, powered by [anyio](https://anyio.readthedocs.io/).
+## Core contract
 
-## Installation
+- `ShipmentFlow.create_shipment(...) -> CreateShipmentOutcome`
+- `ShipmentFlow.create_label(...) -> CreateLabelOutcome`
+- `ShipmentFlow.handle_callback(...) -> ShipmentUpdateOutcome`
+- `ShipmentFlow.fetch_and_update_status(...) -> ShipmentUpdateOutcome`
+- `ShipmentFlow.cancel_shipment(...) -> bool`
 
-### With pip
+`CreateShipmentOutcome` and `CreateLabelOutcome` return label payloads when available.
+The shipment object never stores label bytes or a persisted `label_url` in the core contract.
 
-```bash
-pip install python-sendparcel
-```
-
-### With uv
-
-```bash
-uv add python-sendparcel
-```
-
-### Provider plugins
-
-Install provider packages for real carrier APIs:
-
-```bash
-pip install python-sendparcel[inpost]    # InPost ShipX (locker & courier)
-```
-
-### Framework adapters
-
-Install the adapter for your web framework:
-
-```bash
-pip install python-sendparcel[django]    # Django integration
-pip install python-sendparcel[fastapi]   # FastAPI integration
-pip install python-sendparcel[litestar]  # Litestar integration
-pip install python-sendparcel[frameworks]  # all framework adapters
-pip install python-sendparcel[all]       # everything
-```
-
-### Extras reference
-
-| Extra | Installs |
-|---|---|
-| `dummy` | Built-in dummy provider (no extra package) |
-| `inpost` | `python-sendparcel-inpost` — InPost ShipX provider |
-| `django` | `django-sendparcel` |
-| `fastapi` | `fastapi-sendparcel` |
-| `litestar` | `litestar-sendparcel` |
-| `providers` | Built-in providers (currently `dummy`) |
-| `frameworks` | All framework adapters |
-| `all` | Framework adapters |
-
-## Quick Start
-
-python-sendparcel is framework-agnostic. You provide implementations of two
-protocols — `Shipment` and `ShipmentRepository` — and the library
-handles orchestration, state transitions, and provider communication.
-
-### 1. Implement the Shipment and ShipmentRepository protocols
+## Quick start
 
 ```python
 from dataclasses import dataclass
+from decimal import Decimal
+
+import anyio
+
+from sendparcel import ShipmentFlow
+from sendparcel.types import AddressInfo, ParcelInfo
 
 
 @dataclass
 class MyShipment:
-    """Satisfies the sendparcel Shipment protocol."""
-
     id: str
-    status: str = ""
+    status: str = "new"
     provider: str = ""
     external_id: str = ""
     tracking_number: str = ""
-    label_url: str = ""
 
 
 class InMemoryRepository:
-    """Minimal in-memory ShipmentRepository for demonstration."""
-
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, MyShipment] = {}
         self._counter = 0
 
@@ -107,273 +55,96 @@ class InMemoryRepository:
 
     async def create(self, **kwargs) -> MyShipment:
         self._counter += 1
-        shipment_id = str(self._counter)
         shipment = MyShipment(
-            id=shipment_id,
-            status=kwargs.get("status", ""),
-            provider=kwargs.get("provider", ""),
+            id=str(self._counter),
+            status=str(kwargs.get("status", "new")),
+            provider=str(kwargs.get("provider", "")),
         )
-        self._store[shipment_id] = shipment
+        self._store[shipment.id] = shipment
         return shipment
 
     async def save(self, shipment: MyShipment) -> MyShipment:
         self._store[shipment.id] = shipment
         return shipment
 
-    async def update_status(
-        self, shipment_id: str, status: str, **fields
-    ) -> MyShipment:
-        shipment = self._store[shipment_id]
-        shipment.status = status
-        return shipment
-```
 
-### 2. Create a shipment with ShipmentFlow
+async def main() -> None:
+    flow = ShipmentFlow(repository=InMemoryRepository())
 
-```python
-import anyio
-from decimal import Decimal
-
-from sendparcel import ShipmentFlow
-from sendparcel.types import AddressInfo, ParcelInfo
-
-
-async def main():
-    repo = InMemoryRepository()
-    flow = ShipmentFlow(repository=repo)
-
-    # Create shipment using the built-in dummy provider
-    shipment = await flow.create_shipment(
+    created = await flow.create_shipment(
         "dummy",
         sender_address=AddressInfo(
             name="Sender Co.",
-            line1="ul. Marszalkowska 1",
-            city="Warszawa",
+            line1="Marszalkowska 1",
+            city="Warsaw",
             postal_code="00-001",
             country_code="PL",
         ),
         receiver_address=AddressInfo(
             name="Jan Kowalski",
-            line1="ul. Dluga 10",
+            line1="Dluga 10",
             city="Gdansk",
             postal_code="80-001",
             country_code="PL",
         ),
         parcels=[ParcelInfo(weight_kg=Decimal("2.5"))],
     )
-    print(shipment.status)           # "created" or "label_ready"
-    print(shipment.external_id)      # "dummy-1"
-    print(shipment.tracking_number)  # "DUMMY-1"
+
+    print(created.shipment.status)
+    print(created.shipment.external_id)
+    print(created.shipment.tracking_number)
+
+    labelled = await flow.create_label(created.shipment)
+    print(labelled.label.get("url"))
 
 
 anyio.run(main)
 ```
 
-## Architecture
+## Provider model
 
-python-sendparcel is organized into focused modules:
+- `BaseProvider.create_shipment(...)` returns `ShipmentCreateResult`.
+- `BaseProvider.confirmation_method` defaults to `ConfirmationMethod.NONE`.
+- `LabelProvider.create_label(...)` returns `LabelInfo`.
+- `PushCallbackProvider.handle_callback(...)` returns `ShipmentUpdateResult`.
+- `PullStatusProvider.fetch_shipment_status(...)` returns `ShipmentUpdateResult`.
+- `CancellableProvider.cancel_shipment(...)` returns `bool`.
 
-```
-sendparcel/
-├── __init__.py          # Public API surface
-├── enums.py             # ShipmentStatus, ConfirmationMethod
-├── types.py             # TypedDict definitions (AddressInfo, ParcelInfo, …)
-├── protocols.py         # Shipment, ShipmentRepository protocols
-├── provider.py          # BaseProvider ABC
-├── registry.py          # PluginRegistry with entry-point discovery
-├── flow.py              # ShipmentFlow orchestrator
-├── fsm.py               # State machine transitions (pytransitions)
-├── validators.py        # Pluggable validation chain
-├── exceptions.py        # Exception hierarchy
-└── providers/
-    ├── __init__.py      # Built-in provider list
-    └── dummy.py         # DummyProvider reference implementation
-```
+Use `ConfirmationMethod.PUSH` only with `PushCallbackProvider` and
+`ConfirmationMethod.PULL` only with `PullStatusProvider`.
 
-### Key components
+The core owns shipment state transitions. Providers translate carrier responses
+into normalized results.
 
-| Component | Module | Description |
-|---|---|---|
-| `ShipmentFlow` | `flow.py` | Async orchestrator — creates shipments, fetches labels, handles callbacks, polls status, cancels. |
-| `BaseProvider` | `provider.py` | Abstract base class that all shipping providers must subclass. |
-| `PluginRegistry` | `registry.py` | Discovers providers from `sendparcel.providers` entry points and built-ins. Global `registry` singleton. |
-| `ShipmentStatus` | `enums.py` | 9-state `StrEnum` representing the shipment lifecycle. |
-| Domain types | `types.py` | `AddressInfo`, `ParcelInfo`, `LabelInfo`, `ShipmentCreateResult`, `ShipmentStatusResponse`, `TrackingEvent`. |
-| Protocols | `protocols.py` | `Shipment`, `ShipmentRepository` — all `@runtime_checkable`. |
-| FSM | `fsm.py` | Transition definitions with guards (e.g. `label_url` required before `confirm_label`). |
-| Validators | `validators.py` | Chain of callables invoked before provider operations. |
-
-### Shipment state machine
-
-```
-                                                    mark_in_transit
-                                              ┌────────────────────┐
-                                              │                    ▼
-NEW ──confirm_created──▸ CREATED ──confirm_label──▸ LABEL_READY   IN_TRANSIT ──mark_out_for_delivery──▸ OUT_FOR_DELIVERY
- │                         │                          │            │  │                                    │  │
- │                         │                          │            │  ├── mark_delivered ─────────────────▸│  │
- │                         │                          │            │  │                                    │  │
- │                         │                          │            │  │       mark_delivered               │  │
- │                         │                          │            │  │  ┌────────────────────────────────-─┘  │
- │                         │                          │            │  │  ▼                                    │
- │                         │                          │            │  │ DELIVERED                              │
- │                         │                          │            │  │  │                                    │
- │                         │                          │            │  │  └── mark_returned ──▸ RETURNED ◂─────┤
- │                         │                          │            │  │                          ▴            │
- │                         │                          │            │  └── mark_returned ─────────┘            │
- │                         │                          │            │                                          │
- └──────── cancel ─────────┴────── cancel ────────────┴──▸ CANCELLED                                         │
-                                                                                                             │
- Any of {NEW, CREATED, LABEL_READY, IN_TRANSIT, OUT_FOR_DELIVERY} ──fail──▸ FAILED                           │
-```
-
-Guards enforce data integrity:
-- `confirm_label` requires `label_url` to be set on the shipment.
-- `mark_in_transit` requires `tracking_number` to be set on the shipment.
-
-## Provider Authoring
-
-Create a provider by subclassing `BaseProvider` and implementing `create_shipment`:
-
-```python
-from typing import ClassVar
-
-from sendparcel.provider import BaseProvider
-from sendparcel.types import ShipmentCreateResult
-
-
-class MyCarrierProvider(BaseProvider):
-    slug: ClassVar[str] = "mycarrier"
-    display_name: ClassVar[str] = "My Carrier"
-    supported_countries: ClassVar[list[str]] = ["PL", "DE"]
-    supported_services: ClassVar[list[str]] = ["standard"]
-
-    async def create_shipment(
-        self, *, sender_address, receiver_address, parcels, **kwargs
-    ) -> ShipmentCreateResult:
-        # Call your carrier's API here
-        api_key = self.get_setting("api_key")
-        # sender_address, receiver_address, parcels are passed directly
-        # ... HTTP call to carrier API ...
-        return ShipmentCreateResult(
-            external_id="carrier-12345",
-            tracking_number="TRACK-12345",
-        )
-```
-
-### Entry-point registration
-
-Declare your provider in `pyproject.toml` so it is auto-discovered:
-
-```toml
-[project.entry-points."sendparcel.providers"]
-mycarrier = "mycarrier_sendparcel.provider:MyCarrierProvider"
-```
-
-### Manual registration
-
-```python
-from sendparcel import registry
-
-registry.register(MyCarrierProvider)
-```
-
-### Provider configuration
-
-Pass per-provider settings through `ShipmentFlow`:
-
-```python
-flow = ShipmentFlow(
-    repository=repo,
-    config={
-        "mycarrier": {
-            "api_key": "sk_live_...",
-            "sandbox": True,
-        },
-    },
-)
-```
-
-Settings are accessible inside the provider via `self.get_setting("api_key")`.
-
-### Optional methods
-
-Beyond the required `create_shipment`, providers can override:
-
-| Method | Purpose |
-|---|---|
-| `create_label(**kwargs)` | Generate or fetch a shipping label. |
-| `verify_callback(data, headers, **kwargs)` | Validate webhook authenticity. |
-| `handle_callback(data, headers, **kwargs)` | Apply webhook status updates. |
-| `fetch_shipment_status(**kwargs)` | Poll current shipment status. |
-| `cancel_shipment(**kwargs)` | Cancel a shipment. |
-
-### Class-level attributes
-
-| Attribute | Type | Description |
-|---|---|---|
-| `slug` | `str` | Unique provider identifier. |
-| `display_name` | `str` | Human-readable name. |
-| `supported_countries` | `list[str]` | ISO country codes. |
-| `supported_services` | `list[str]` | Service level identifiers. |
-| `confirmation_method` | `ConfirmationMethod` | `PUSH` (webhook) or `PULL` (polling). Default: `PUSH`. |
-| `user_selectable` | `bool` | Whether this provider appears in `registry.get_choices()`. Default: `True`. |
-
-## Ecosystem
-
-python-sendparcel is the core library. Framework-specific integrations are
-provided by separate packages:
-
-| Package | Type | Repository |
-|---|---|---|
-| [python-sendparcel-inpost](https://github.com/python-sendparcel/python-sendparcel-inpost) | Provider — InPost ShipX (locker & courier) | `python-sendparcel/python-sendparcel-inpost` |
-| [django-sendparcel](https://github.com/python-sendparcel/django-sendparcel) | Framework adapter — Django | `python-sendparcel/django-sendparcel` |
-| [fastapi-sendparcel](https://github.com/python-sendparcel/fastapi-sendparcel) | Framework adapter — FastAPI | `python-sendparcel/fastapi-sendparcel` |
-| [litestar-sendparcel](https://github.com/python-sendparcel/litestar-sendparcel) | Framework adapter — Litestar | `python-sendparcel/litestar-sendparcel` |
-
-Each framework wrapper provides framework-native models, views/routes, and
-repository implementations so you don't have to write the boilerplate shown in
-the Quick Start above.
-
-Provider packages (like `python-sendparcel-inpost`) supply carrier-specific
-`BaseProvider` subclasses that integrate with real shipping APIs.
-
-## Supported Versions
-
-| Python | Status |
-|---|---|
-| 3.12+ | Supported |
-| 3.13 | Supported |
-| < 3.12 | Not supported |
-
-### Core dependencies
-
-| Package | Minimum version |
-|---|---|
-| `transitions` | 0.9.0 |
-| `httpx` | 0.27.0 |
-| `anyio` | 4.0 |
-
-## Running Tests
-
-The test suite uses **pytest** with **pytest-asyncio**.
+## Installation
 
 ```bash
-# Install dev dependencies
-uv sync --extra dev
-
-# Run the full test suite
-uv run pytest
-
-# With coverage
-uv run pytest --cov=sendparcel --cov-report=term-missing
+pip install python-sendparcel
 ```
 
-## Credits
+With `uv`:
 
-- **Author:** Dominik Kozaczko ([dominik@kozaczko.info](mailto:dominik@kozaczko.info))
-- Inspired by the [django-getpaid](https://github.com/django-getpaid/django-getpaid) architecture and plugin model.
+```bash
+uv add python-sendparcel
+```
 
-## License
+## Extras
 
-[MIT](https://opensource.org/licenses/MIT)
+- `django`
+- `fastapi`
+- `litestar`
+- `inpost`
+- `dpdpl`
+- `cli`
+- `frameworks`
+- `providers`
+- `all`
+
+## Development
+
+```bash
+uv sync --extra dev
+uv run pytest
+uv run ruff check src tests
+uv run mypy src tests
+```

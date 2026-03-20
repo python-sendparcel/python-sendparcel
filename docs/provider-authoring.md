@@ -1,164 +1,121 @@
 # Provider Authoring Guide
 
-## Package Naming
+## Package naming
 
 - Distribution: `python-sendparcel-<provider>`
 - Import package: `sendparcel_<provider>`
 
-## Required Entry Point
+## Entry point
 
-Register the provider in `pyproject.toml`:
+Register providers in `pyproject.toml`:
 
 ```toml
 [project.entry-points."sendparcel.providers"]
-<provider> = "sendparcel_<provider>.provider:<ProviderClass>"
+mycarrier = "sendparcel_mycarrier.provider:MyCarrierProvider"
 ```
 
-## Provider Contract
+## Provider contract
 
-The `python-sendparcel` ecosystem uses a trait-based model. Only core shipment creation is required; all other capabilities are optional and declared via mixin traits.
+Every provider must subclass `sendparcel.provider.BaseProvider`.
 
-### Base Provider (Required)
+### Required
 
-Every provider MUST inherit from `sendparcel.provider.BaseProvider` and implement:
+- `create_shipment(sender_address, receiver_address, parcels, **kwargs) -> ShipmentCreateResult`
 
-- `create_shipment(sender_address, receiver_address, parcels, **kwargs)` - creates a shipment in the provider API. Returns a `ShipmentCreateResult`.
+### Optional traits
 
-Class variables:
-- `slug`: Unique provider identifier (e.g., "dhl", "inpost").
-- `display_name`: Human-readable name.
-- `supported_countries`: List of ISO 3166-1 alpha-2 country codes.
-- `supported_services`: List of provider-specific service slugs.
-- `config_schema`: JSON Schema for provider settings.
+| Capability | Trait | Return value |
+|---|---|---|
+| Labels | `LabelProvider` | `LabelInfo` |
+| Webhooks | `PushCallbackProvider` | `ShipmentUpdateResult` |
+| Polling | `PullStatusProvider` | `ShipmentUpdateResult` |
+| Cancellation | `CancellableProvider` | `bool` |
 
-### Optional Capability Traits
+## Important rule
 
-Providers declare additional capabilities by inheriting from trait mixins. The framework uses `isinstance()` at runtime to detect supported features.
+Providers do not mutate shipment state directly.
 
-#### Capability Matrix
+The core flow owns state transitions. Providers return normalized results:
 
-| Capability | Trait Class | Required Method(s) |
-|------------|-------------|--------------------|
-| Labels | `LabelProvider` | `create_label()` |
-| Webhooks | `PushCallbackProvider` | `verify_callback()`, `handle_callback()` |
-| Status Polling | `PullStatusProvider` | `fetch_shipment_status()` |
-| Cancellation | `CancellableProvider` | `cancel_shipment()` |
+- `ShipmentCreateResult` for creation
+- `LabelInfo` for labels
+- `ShipmentUpdateResult` for callbacks and polling
 
-#### LabelProvider
-Providers that generate shipping labels (e.g., PDF, ZPL).
-- `create_label(**kwargs)`: Returns `LabelInfo`.
+That means callback and polling implementations should translate carrier payloads into normalized status updates instead of calling model methods.
 
-#### PushCallbackProvider
-Providers that receive webhook notifications from the provider's server.
-- `verify_callback(data, headers, **kwargs)`: Authenticates the webhook (raises `InvalidCallbackError` if invalid).
-- `handle_callback(data, headers, **kwargs)`: Processes the webhook payload and updates shipment state.
+## Confirmation method
 
-#### PullStatusProvider
-Providers that support status polling via API.
-- `fetch_shipment_status(**kwargs)`: Returns `ShipmentStatusResponse`.
+`BaseProvider.confirmation_method` defaults to `ConfirmationMethod.NONE`.
 
-#### CancellableProvider
-Providers that support shipment cancellation.
-- `cancel_shipment(**kwargs)`: Returns a boolean indicating success.
+- `NONE` - the provider does not expose shipment updates.
+- `PUSH` - the provider must implement `PushCallbackProvider`.
+- `PULL` - the provider must implement `PullStatusProvider`.
 
-## Provider Examples
+Do not declare `PUSH` or `PULL` unless the provider actually implements the
+matching capability trait.
 
-### Minimal Provider (Create Shipment Only)
+## Minimal example
 
 ```python
-from sendparcel.provider import BaseProvider
+from typing import Any, ClassVar
+
+from sendparcel.provider import BaseProvider, LabelProvider
 from sendparcel.types import (
     AddressInfo,
+    LabelInfo,
     ParcelInfo,
-    ShipmentCreateResult
+    ShipmentCreateResult,
 )
 
-class MinimalProvider(BaseProvider):
-    slug = "minimal"
-    display_name = "Minimal Provider"
-    
+
+class MyCarrierProvider(BaseProvider, LabelProvider):
+    slug: ClassVar[str] = "mycarrier"
+    display_name: ClassVar[str] = "My Carrier"
+
     async def create_shipment(
         self,
         *,
         sender_address: AddressInfo,
         receiver_address: AddressInfo,
         parcels: list[ParcelInfo],
-        **kwargs
+        **kwargs: Any,
     ) -> ShipmentCreateResult:
-        # Implementation calling provider API
         return ShipmentCreateResult(
-            external_id="123",
-            tracking_number="TRK123"
+            external_id="carrier-123",
+            tracking_number="TRACK-123",
+        )
+
+    async def create_label(self, **kwargs: Any) -> LabelInfo:
+        return LabelInfo(
+            format="PDF",
+            url="https://carrier.example/labels/TRACK-123.pdf",
         )
 ```
 
-### Full-Featured Provider
+## Callback and polling example
 
 ```python
-from typing import Any
-from sendparcel.provider import (
-    BaseProvider,
-    LabelProvider,
-    PushCallbackProvider,
-    PullStatusProvider,
-    CancellableProvider
-)
+from sendparcel.provider import PullStatusProvider, PushCallbackProvider
+from sendparcel.types import ShipmentUpdateResult
 
-class FullProvider(
-    BaseProvider,
-    LabelProvider,
-    PushCallbackProvider,
-    PullStatusProvider,
-    CancellableProvider
-):
-    slug = "full"
-    
-    async def create_shipment(self, **kwargs): ...
-    
-    async def create_label(self, **kwargs):
-        # Implementation returning LabelInfo
-        ...
 
-    async def verify_callback(self, data, headers, **kwargs):
-        # Validate signatures
-        ...
+class StatusProvider(BaseProvider, PushCallbackProvider, PullStatusProvider):
+    async def verify_callback(self, data, headers, **kwargs) -> None:
+        return None
 
-    async def handle_callback(self, data, headers, **kwargs):
-        # Process webhook
-        ...
+    async def handle_callback(
+        self, data, headers, **kwargs
+    ) -> ShipmentUpdateResult:
+        return ShipmentUpdateResult(status="in_transit")
 
-    async def fetch_shipment_status(self, **kwargs):
-        # Poll provider API
-        ...
-
-    async def cancel_shipment(self, **kwargs):
-        # Cancel shipment
-        ...
+    async def fetch_shipment_status(self, **kwargs) -> ShipmentUpdateResult:
+        return ShipmentUpdateResult(status="delivered")
 ```
 
-## Capability Detection
-
-The framework detects capabilities dynamically. This allows generic UI or background tasks to gracefully handle missing features:
-
-```python
-from sendparcel.provider import LabelProvider
-
-if isinstance(provider, LabelProvider):
-    label = await provider.create_label()
-else:
-    # Gracefully inform the user that labels are not supported
-```
-
-## Async Rules
-
-- Providers must be async-first.
-- Use `anyio` utilities for sleeps, timeouts, and async primitives.
-- Do not block the event loop with sync HTTP clients (use `httpx.AsyncClient`).
-
-## Quality Checks
+## Quality checks
 
 ```bash
 uv sync --extra dev
-uv run --extra dev ruff check src tests
-uv run --extra dev pytest -q
+uv run ruff check src tests
+uv run pytest -q
 ```
