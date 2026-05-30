@@ -6,62 +6,62 @@ from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import InvalidTransitionError
 from sendparcel.protocols import Shipment
 
-ALLOWED_STATUS_TRANSITIONS: dict[str, frozenset[str]] = {
-    ShipmentStatus.NEW.value: frozenset(
+ALLOWED_STATUS_TRANSITIONS: dict[ShipmentStatus, frozenset[ShipmentStatus]] = {
+    ShipmentStatus.NEW: frozenset(
         {
-            ShipmentStatus.CREATED.value,
-            ShipmentStatus.CANCELLED.value,
-            ShipmentStatus.FAILED.value,
+            ShipmentStatus.CREATED,
+            ShipmentStatus.CANCELLED,
+            ShipmentStatus.FAILED,
         }
     ),
-    ShipmentStatus.CREATED.value: frozenset(
+    ShipmentStatus.CREATED: frozenset(
         {
-            ShipmentStatus.LABEL_READY.value,
-            ShipmentStatus.IN_TRANSIT.value,
-            ShipmentStatus.OUT_FOR_DELIVERY.value,
-            ShipmentStatus.DELIVERED.value,
-            ShipmentStatus.RETURNED.value,
-            ShipmentStatus.CANCELLED.value,
-            ShipmentStatus.FAILED.value,
+            ShipmentStatus.LABEL_READY,
+            ShipmentStatus.IN_TRANSIT,
+            ShipmentStatus.OUT_FOR_DELIVERY,
+            ShipmentStatus.DELIVERED,
+            ShipmentStatus.RETURNED,
+            ShipmentStatus.CANCELLED,
+            ShipmentStatus.FAILED,
         }
     ),
-    ShipmentStatus.LABEL_READY.value: frozenset(
+    ShipmentStatus.LABEL_READY: frozenset(
         {
-            ShipmentStatus.IN_TRANSIT.value,
-            ShipmentStatus.OUT_FOR_DELIVERY.value,
-            ShipmentStatus.DELIVERED.value,
-            ShipmentStatus.RETURNED.value,
-            ShipmentStatus.CANCELLED.value,
-            ShipmentStatus.FAILED.value,
+            ShipmentStatus.IN_TRANSIT,
+            ShipmentStatus.OUT_FOR_DELIVERY,
+            ShipmentStatus.DELIVERED,
+            ShipmentStatus.RETURNED,
+            ShipmentStatus.CANCELLED,
+            ShipmentStatus.FAILED,
         }
     ),
-    ShipmentStatus.IN_TRANSIT.value: frozenset(
+    ShipmentStatus.IN_TRANSIT: frozenset(
         {
-            ShipmentStatus.OUT_FOR_DELIVERY.value,
-            ShipmentStatus.DELIVERED.value,
-            ShipmentStatus.RETURNED.value,
-            ShipmentStatus.FAILED.value,
+            ShipmentStatus.OUT_FOR_DELIVERY,
+            ShipmentStatus.DELIVERED,
+            ShipmentStatus.RETURNED,
+            ShipmentStatus.FAILED,
         }
     ),
-    ShipmentStatus.OUT_FOR_DELIVERY.value: frozenset(
+    ShipmentStatus.OUT_FOR_DELIVERY: frozenset(
         {
-            ShipmentStatus.DELIVERED.value,
-            ShipmentStatus.RETURNED.value,
-            ShipmentStatus.FAILED.value,
+            ShipmentStatus.DELIVERED,
+            ShipmentStatus.RETURNED,
+            ShipmentStatus.FAILED,
         }
     ),
-    ShipmentStatus.DELIVERED.value: frozenset({ShipmentStatus.RETURNED.value}),
-    ShipmentStatus.CANCELLED.value: frozenset(),
-    ShipmentStatus.FAILED.value: frozenset(),
-    ShipmentStatus.RETURNED.value: frozenset(),
+    ShipmentStatus.DELIVERED: frozenset({ShipmentStatus.RETURNED}),
+    ShipmentStatus.CANCELLED: frozenset(),
+    ShipmentStatus.FAILED: frozenset(),
+    ShipmentStatus.RETURNED: frozenset(),
 }
 
 
-def normalize_status(status: str | ShipmentStatus) -> str:
-    """Return a normalized shipment status string."""
+def normalize_status(status: str | ShipmentStatus) -> ShipmentStatus:
+    """Normalise a status to a :class:`ShipmentStatus` enum member."""
 
     try:
-        return ShipmentStatus(status).value
+        return ShipmentStatus(status)
     except ValueError as exc:
         raise InvalidTransitionError(
             f"Unknown shipment status {status!r}"
@@ -89,11 +89,11 @@ def transition_shipment(
     current = normalize_status(shipment.status)
     target = normalize_status(target_status)
     if current == target:
-        shipment.status = target
+        shipment.status = target.value
         return shipment
     if target not in ALLOWED_STATUS_TRANSITIONS[current]:
         raise InvalidTransitionError(
             f"Shipment cannot transition from {current!r} to {target!r}"
         )
-    shipment.status = target
+    shipment.status = target.value
     return shipment

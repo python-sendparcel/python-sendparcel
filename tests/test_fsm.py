@@ -81,6 +81,4 @@ def test_can_transition_reports_current_rules() -> None:
 
 
 def test_allowed_status_transitions_cover_all_statuses() -> None:
-    assert set(ALLOWED_STATUS_TRANSITIONS) == {
-        status.value for status in ShipmentStatus
-    }
+    assert set(ALLOWED_STATUS_TRANSITIONS) == set(ShipmentStatus)
