@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from importlib.metadata import entry_points
 
 from sendparcel.exceptions import ProviderNotFoundError
@@ -11,15 +12,75 @@ ENTRY_POINT_GROUP = "sendparcel.providers"
 
 
 class PluginRegistry:
-    """Discover and store provider classes."""
+    """Discover and store provider classes.
+
+    Thread-safe: all public methods and ``_register_provider`` are
+    protected by a ``threading.Lock``.
+    """
 
     def __init__(self) -> None:
         self._providers: dict[str, type[BaseProvider]] = {}
         self._discovered = False
+        self._lock = threading.Lock()
 
     def discover(self) -> None:
-        """Load providers from entry points."""
+        """Load providers from entry points.
 
+        Thread-safe: acquires ``_lock`` before mutating state.
+        Idempotent — subsequent calls are no-ops.
+        """
+        with self._lock:
+            if self._discovered:
+                return
+            self._discover_unlocked()
+
+    def register(self, provider_class: type[BaseProvider]) -> None:
+        """Register provider manually.
+
+        Thread-safe.
+        """
+        with self._lock:
+            self._register_provider(provider_class)
+
+    def unregister(self, slug: str) -> None:
+        """Unregister provider by slug.
+
+        Thread-safe.
+        """
+        with self._lock:
+            self._providers.pop(slug, None)
+
+    def get_by_slug(self, slug: str) -> type[BaseProvider]:
+        """Get provider class by slug.
+
+        Thread-safe.
+        """
+        self._ensure_discovered()
+        with self._lock:
+            try:
+                return self._providers[slug]
+            except KeyError as exc:
+                raise ProviderNotFoundError(slug) from exc
+
+    def get_choices(self) -> list[tuple[str, str]]:
+        """Get provider slug/display pairs for user-facing selection.
+
+        Thread-safe.
+        """
+        self._ensure_discovered()
+        with self._lock:
+            return [
+                (provider.slug, provider.display_name)
+                for provider in self._providers.values()
+                if provider.user_selectable
+            ]
+
+    def _ensure_discovered(self) -> None:
+        if not self._discovered:
+            self.discover()
+
+    def _discover_unlocked(self) -> None:
+        """Internal discover — caller must hold ``_lock``."""
         from sendparcel.providers import BUILTIN_PROVIDERS
 
         for provider_class in BUILTIN_PROVIDERS:
@@ -32,40 +93,11 @@ class PluginRegistry:
                 self._register_provider(provider_class)
         self._discovered = True
 
-    def register(self, provider_class: type[BaseProvider]) -> None:
-        """Register provider manually."""
-
-        self._register_provider(provider_class)
-
-    def unregister(self, slug: str) -> None:
-        """Unregister provider by slug."""
-
-        self._providers.pop(slug, None)
-
-    def get_by_slug(self, slug: str) -> type[BaseProvider]:
-        """Get provider class by slug."""
-
-        self._ensure_discovered()
-        try:
-            return self._providers[slug]
-        except KeyError as exc:
-            raise ProviderNotFoundError(slug) from exc
-
-    def get_choices(self) -> list[tuple[str, str]]:
-        """Get provider slug/display pairs for user-facing selection."""
-
-        self._ensure_discovered()
-        return [
-            (provider.slug, provider.display_name)
-            for provider in self._providers.values()
-            if provider.user_selectable
-        ]
-
-    def _ensure_discovered(self) -> None:
-        if not self._discovered:
-            self.discover()
-
     def _register_provider(self, provider_class: type[BaseProvider]) -> None:
+        """Register a single provider class.
+
+        Caller must hold ``_lock``.
+        """
         slug = provider_class.slug
         if not isinstance(slug, str) or not slug:
             raise ValueError("Provider classes must declare a non-empty slug")
