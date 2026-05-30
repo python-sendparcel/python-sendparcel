@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import asyncio
 import httpx
 
 from sendparcel.enums import ShipmentStatus
@@ -228,6 +229,20 @@ class ShipmentFlow:
         except SendParcelException:
             raise
         except httpx.HTTPError as exc:
+            raise CommunicationError(
+                str(exc),
+                context={"original_error": type(exc).__name__},
+            ) from exc
+        except asyncio.TimeoutError as exc:
+            raise CommunicationError(
+                str(exc),
+                context={"original_error": type(exc).__name__},
+            ) from exc
+        except ExceptionGroup as exc:
+            # Flatten any nested exceptions and wrap the group.
+            for e in exc.exceptions:
+                if isinstance(e, SendParcelException):
+                    raise
             raise CommunicationError(
                 str(exc),
                 context={"original_error": type(exc).__name__},
