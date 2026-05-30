@@ -154,6 +154,21 @@ class BrokenProvider(BaseProvider):
         raise httpx.ConnectError("connection refused")
 
 
+class ValueErrorProvider(BaseProvider):
+    slug = "value-error"
+    display_name = "ValueError Provider"
+
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
+        raise ValueError("provider bug: missing field")
+
+
 def _register_and_flow(
     provider_cls: type[BaseProvider],
     *,
@@ -241,6 +256,34 @@ class TestCreateShipment:
                 receiver_address=_RECEIVER,
                 parcels=_PARCELS,
             )
+
+    @pytest.mark.asyncio
+    async def test_non_http_exception_propagates_as_is(self) -> None:
+        """Domain errors (ValueError, TypeError, etc.) must NOT be wrapped."""
+        flow, _ = _register_and_flow(ValueErrorProvider)
+
+        with pytest.raises(ValueError, match="provider bug: missing field"):
+            await flow.create_shipment(
+                "value-error",
+                sender_address=_SENDER,
+                receiver_address=_RECEIVER,
+                parcels=_PARCELS,
+            )
+
+
+class RollbackProvider(BaseProvider):
+    slug = "rollback"
+    display_name = "Rollback Provider"
+
+    async def create_shipment(
+        self,
+        *,
+        sender_address: Any,
+        receiver_address: Any,
+        parcels: Any,
+        **kwargs: Any,
+    ) -> ShipmentCreateResult:
+        raise httpx.ConnectError("provider unavailable")
 
 
 class TestCreateLabel:
@@ -378,3 +421,22 @@ class TestCancelShipment:
 
         with pytest.raises(InvalidTransitionError, match="cannot transition"):
             await flow.cancel_shipment(shipment)
+
+
+class TestCreateShipmentRollback:
+    @pytest.mark.asyncio
+    async def test_provider_failure_deletes_partial_record(self) -> None:
+        """If the provider call fails, the partial record must be deleted."""
+        flow, repository = _register_and_flow(RollbackProvider)
+
+        with pytest.raises(CommunicationError, match="provider unavailable"):
+            await flow.create_shipment(
+                "rollback",
+                sender_address=_SENDER,
+                receiver_address=_RECEIVER,
+                parcels=_PARCELS,
+            )
+
+        # The partial record should have been deleted.
+        assert repository.create_count == 1
+        assert len(repository._store) == 0

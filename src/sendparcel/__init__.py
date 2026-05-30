@@ -13,6 +13,7 @@ from sendparcel.exceptions import (
     ShipmentNotFoundError,
 )
 from sendparcel.flow import ShipmentFlow
+from sendparcel.logging import get_logger
 from sendparcel.provider import (
     BaseProvider,
     CancellableProvider,
@@ -26,6 +27,7 @@ from sendparcel.types import (
     CreateLabelOutcome,
     CreateShipmentOutcome,
     ShipmentUpdateOutcome,
+    ShipmentUpdateResult,
 )
 
 __all__ = [
@@ -36,6 +38,7 @@ __all__ = [
     "CreateLabelOutcome",
     "CreateShipmentOutcome",
     "DummyProvider",
+    "get_logger",
     "InvalidCallbackError",
     "InvalidTransitionError",
     "LabelFormat",
@@ -49,6 +52,8 @@ __all__ = [
     "ShipmentNotFoundError",
     "ShipmentStatus",
     "ShipmentUpdateOutcome",
+    "ShipmentUpdateResult",
     "__version__",
+    "get_logger",
     "registry",
 ]

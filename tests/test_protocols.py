@@ -32,6 +32,14 @@ class DemoRepository:
             setattr(shipment, key, value)
         return shipment
 
+    async def delete(self, shipment_id: str) -> None:
+        pass
+
+    async def find_by_reference(
+        self, provider: str, reference_id: str
+    ) -> DemoShipment | None:
+        return None
+
 
 def test_runtime_protocol_checks_shipment_without_label_url() -> None:
     assert isinstance(DemoShipment(), Shipment)

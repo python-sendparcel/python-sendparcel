@@ -1,8 +1,9 @@
 """Framework integration protocols."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class Shipment(Protocol):
     """Shipment shape expected by sendparcel core."""
 
@@ -13,6 +14,7 @@ class Shipment(Protocol):
     tracking_number: str
 
 
+@runtime_checkable
 class ShipmentRepository(Protocol):
     """Persistence abstraction for adapters."""
 

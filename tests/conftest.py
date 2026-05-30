@@ -64,6 +64,9 @@ class InMemoryRepository:
         self._store[shipment_id] = shipment
         return shipment
 
+    async def delete(self, shipment_id: str) -> None:
+        self._store.pop(shipment_id, None)
+
 
 @pytest.fixture
 def demo_shipment() -> DemoShipment:

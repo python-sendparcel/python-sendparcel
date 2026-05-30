@@ -13,6 +13,7 @@ def test_public_api_exports_exact_set() -> None:
         "CreateLabelOutcome",
         "CreateShipmentOutcome",
         "DummyProvider",
+        "get_logger",
         "InvalidCallbackError",
         "InvalidTransitionError",
         "LabelFormat",
@@ -26,6 +27,7 @@ def test_public_api_exports_exact_set() -> None:
         "ShipmentNotFoundError",
         "ShipmentStatus",
         "ShipmentUpdateOutcome",
+        "ShipmentUpdateResult",
         "__version__",
         "registry",
     }
