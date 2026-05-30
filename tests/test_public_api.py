@@ -7,6 +7,8 @@ def test_public_api_exports_exact_set() -> None:
     """Verify __all__ contains exactly the expected symbols."""
     expected = {
         "BaseProvider",
+        "BatchCreateResult",
+        "BatchResult",
         "CancellableProvider",
         "CommunicationError",
         "ConfirmationMethod",
@@ -23,6 +25,7 @@ def test_public_api_exports_exact_set() -> None:
         "PullStatusProvider",
         "PushCallbackProvider",
         "SendParcelException",
+        "ShipmentBatch",
         "ShipmentFlow",
         "ShipmentNotFoundError",
         "ShipmentStatus",

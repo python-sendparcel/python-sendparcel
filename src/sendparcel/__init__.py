@@ -2,6 +2,7 @@
 
 __version__ = "0.1.1"
 
+from sendparcel.batch import BatchCreateResult, BatchResult, ShipmentBatch
 from sendparcel.enums import ConfirmationMethod, LabelFormat, ShipmentStatus
 from sendparcel.exceptions import (
     CommunicationError,
@@ -32,6 +33,8 @@ from sendparcel.types import (
 
 __all__ = [
     "BaseProvider",
+    "BatchCreateResult",
+    "BatchResult",
     "CancellableProvider",
     "CommunicationError",
     "ConfirmationMethod",
@@ -48,12 +51,12 @@ __all__ = [
     "PullStatusProvider",
     "PushCallbackProvider",
     "SendParcelException",
+    "ShipmentBatch",
     "ShipmentFlow",
     "ShipmentNotFoundError",
     "ShipmentStatus",
     "ShipmentUpdateOutcome",
     "ShipmentUpdateResult",
     "__version__",
-    "get_logger",
     "registry",
 ]
