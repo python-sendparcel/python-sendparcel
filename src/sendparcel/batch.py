@@ -28,6 +28,7 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -134,76 +135,25 @@ class ShipmentBatch:
         Returns:
             BatchCreateResult with per-shipment results.
         """
-        results: list[BatchResult] = []
-        successful = 0
-        failed = 0
+        semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        for i, shipment_data in enumerate(shipments):
-            provider_slug = shipment_data.get("provider_slug")
-            if not provider_slug:
-                results.append(
-                    BatchResult(
-                        index=i,
-                        success=False,
-                        error="Missing provider_slug",
-                    )
-                )
-                failed += 1
-                continue
-
-            try:
-                # Validate provider exists
-                self.registry.get_by_slug(provider_slug)
-
-                # Create flow for this shipment
-                flow = ShipmentFlow(
-                    repository=self.repository,
-                    config=self.config,
-                    registry=self.registry,
+        async def _create_one(
+            index: int, shipment_data: dict[str, Any]
+        ) -> BatchResult:
+            async with semaphore:
+                return await self._create_single_shipment(
+                    index, shipment_data
                 )
 
-                # Create the shipment
-                outcome = await flow.create_shipment(
-                    provider_slug=provider_slug,
-                    sender_address=shipment_data["sender_address"],
-                    receiver_address=shipment_data["receiver_address"],
-                    parcels=shipment_data["parcels"],
-                    **{k: v for k, v in shipment_data.items()
-                       if k not in ("provider_slug", "sender_address",
-                                    "receiver_address", "parcels")},
-                )
+        results = await asyncio.gather(
+            *(_create_one(i, d) for i, d in enumerate(shipments))
+        )
 
-                results.append(
-                    BatchResult(
-                        index=i,
-                        success=True,
-                        shipment=outcome.shipment,
-                        outcome=outcome,
-                    )
-                )
-                successful += 1
-                logger.info(
-                    "Batch create: shipment %d created successfully "
-                    "(provider=%s, tracking=%s)",
-                    i,
-                    provider_slug,
-                    outcome.shipment.tracking_number,
-                )
+        successful = sum(1 for r in results if r.success)
+        failed = sum(1 for r in results if not r.success)
 
-            except Exception as exc:
-                results.append(
-                    BatchResult(
-                        index=i,
-                        success=False,
-                        error=str(exc),
-                    )
-                )
-                failed += 1
-                logger.warning(
-                    "Batch create: shipment %d failed: %s",
-                    i,
-                    exc,
-                )
+        # Sort by original index to preserve input order.
+        results.sort(key=lambda r: r.index)
 
         return BatchCreateResult(
             total=len(shipments),
@@ -211,6 +161,63 @@ class ShipmentBatch:
             failed=failed,
             results=results,
         )
+
+    async def _create_single_shipment(
+        self, index: int, shipment_data: dict[str, Any]
+    ) -> BatchResult:
+        provider_slug = shipment_data.get("provider_slug")
+        if not provider_slug:
+            return BatchResult(
+                index=index,
+                success=False,
+                error="Missing provider_slug",
+            )
+
+        try:
+            self.registry.get_by_slug(provider_slug)
+
+            flow = ShipmentFlow(
+                repository=self.repository,
+                config=self.config,
+                registry=self.registry,
+            )
+
+            outcome = await flow.create_shipment(
+                provider_slug=provider_slug,
+                sender_address=shipment_data["sender_address"],
+                receiver_address=shipment_data["receiver_address"],
+                parcels=shipment_data["parcels"],
+                **{k: v for k, v in shipment_data.items()
+                   if k not in ("provider_slug", "sender_address",
+                                "receiver_address", "parcels")},
+            )
+
+            logger.info(
+                "Batch create: shipment %d created successfully "
+                "(provider=%s, tracking=%s)",
+                index,
+                provider_slug,
+                outcome.shipment.tracking_number,
+            )
+
+            return BatchResult(
+                index=index,
+                success=True,
+                shipment=outcome.shipment,
+                outcome=outcome,
+            )
+
+        except Exception as exc:
+            logger.warning(
+                "Batch create: shipment %d failed: %s",
+                index,
+                exc,
+            )
+            return BatchResult(
+                index=index,
+                success=False,
+                error=str(exc),
+            )
 
     async def fetch_statuses(
         self,
@@ -224,34 +231,35 @@ class ShipmentBatch:
         Returns:
             List of BatchResult with per-shipment status updates.
         """
-        results: list[BatchResult] = []
+        semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        for i, shipment_id in enumerate(shipment_ids):
-            try:
-                shipment = await self.repository.get_by_id(shipment_id)
-                flow = ShipmentFlow(
-                    repository=self.repository,
-                    config=self.config,
-                    registry=self.registry,
-                )
-                outcome = await flow.fetch_and_update_status(shipment)
-                results.append(
-                    BatchResult(
-                        index=i,
+        async def _fetch_one(index: int, sid: str) -> BatchResult:
+            async with semaphore:
+                try:
+                    shipment = await self.repository.get_by_id(sid)
+                    flow = ShipmentFlow(
+                        repository=self.repository,
+                        config=self.config,
+                        registry=self.registry,
+                    )
+                    outcome = await flow.fetch_and_update_status(shipment)
+                    return BatchResult(
+                        index=index,
                         success=True,
                         shipment=outcome.shipment,
                         outcome=outcome,
                     )
-                )
-            except Exception as exc:
-                results.append(
-                    BatchResult(
-                        index=i,
+                except Exception as exc:
+                    return BatchResult(
+                        index=index,
                         success=False,
                         error=str(exc),
                     )
-                )
 
+        results = await asyncio.gather(
+            *(_fetch_one(i, sid) for i, sid in enumerate(shipment_ids))
+        )
+        results.sort(key=lambda r: r.index)
         return results
 
     async def cancel_shipments(
@@ -266,32 +274,33 @@ class ShipmentBatch:
         Returns:
             List of BatchResult with per-shipment cancellation results.
         """
-        results: list[BatchResult] = []
+        semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        for i, shipment_id in enumerate(shipment_ids):
-            try:
-                shipment = await self.repository.get_by_id(shipment_id)
-                flow = ShipmentFlow(
-                    repository=self.repository,
-                    config=self.config,
-                    registry=self.registry,
-                )
-                cancelled = await flow.cancel_shipment(shipment)
-                results.append(
-                    BatchResult(
-                        index=i,
+        async def _cancel_one(index: int, sid: str) -> BatchResult:
+            async with semaphore:
+                try:
+                    shipment = await self.repository.get_by_id(sid)
+                    flow = ShipmentFlow(
+                        repository=self.repository,
+                        config=self.config,
+                        registry=self.registry,
+                    )
+                    cancelled = await flow.cancel_shipment(shipment)
+                    return BatchResult(
+                        index=index,
                         success=True,
                         shipment=shipment,
                         outcome={"cancelled": cancelled},
                     )
-                )
-            except Exception as exc:
-                results.append(
-                    BatchResult(
-                        index=i,
+                except Exception as exc:
+                    return BatchResult(
+                        index=index,
                         success=False,
                         error=str(exc),
                     )
-                )
 
+        results = await asyncio.gather(
+            *(_cancel_one(i, sid) for i, sid in enumerate(shipment_ids))
+        )
+        results.sort(key=lambda r: r.index)
         return results
