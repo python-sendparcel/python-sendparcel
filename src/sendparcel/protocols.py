@@ -1,9 +1,8 @@
 """Framework integration protocols."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol
 
 
-@runtime_checkable
 class Shipment(Protocol):
     """Shipment shape expected by sendparcel core."""
 
@@ -14,7 +13,6 @@ class Shipment(Protocol):
     tracking_number: str
 
 
-@runtime_checkable
 class ShipmentRepository(Protocol):
     """Persistence abstraction for adapters."""
 
@@ -24,3 +22,7 @@ class ShipmentRepository(Protocol):
     async def update_status(
         self, shipment_id: str, status: str, **fields: Any
     ) -> Shipment: ...
+    async def delete(self, shipment_id: str) -> None: ...
+    async def find_by_reference(
+        self, provider: str, reference_id: str
+    ) -> Shipment | None: ...

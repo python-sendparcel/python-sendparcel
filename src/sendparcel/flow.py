@@ -56,25 +56,67 @@ class ShipmentFlow:
         sender_address: AddressInfo,
         receiver_address: AddressInfo,
         parcels: list[ParcelInfo],
+        idempotency_key: str | None = None,
         **kwargs: Any,
     ) -> CreateShipmentOutcome:
-        """Create a shipment record with explicit address and parcel data."""
+        """Create a shipment record with explicit address and parcel data.
 
+        Args:
+            provider_slug: Provider identifier.
+            sender_address: Sender address info.
+            receiver_address: Receiver address info.
+            parcels: List of parcel definitions.
+            idempotency_key: Optional key for retry safety. If a shipment
+                with this key already exists, it is returned without
+                calling the provider again. The key is stored in the
+                ``reference_id`` field of the shipment record.
+            **kwargs: Passed to the provider (after repo-only fields
+                are stripped).
+
+        Returns:
+            CreateShipmentOutcome with the persisted shipment and
+            optional label payload.
+        """
         self.registry.get_by_slug(provider_slug)
+
+        # Separate repository kwargs from provider kwargs.
+        repo_kwargs: dict[str, Any] = {}
+        for key in ("reference_id",):
+            if key in kwargs:
+                repo_kwargs[key] = kwargs.pop(key)
+
+        # Apply idempotency key to reference_id if provided.
+        if idempotency_key is not None:
+            repo_kwargs.setdefault("reference_id", idempotency_key)
+
+        # Check for existing shipment with same idempotency key.
+        if idempotency_key is not None:
+            existing = await self.repository.find_by_reference(
+                provider_slug, idempotency_key
+            )
+            if existing is not None:
+                return CreateShipmentOutcome(shipment=existing, label=None)
+
         shipment = await self.repository.create(
             provider=provider_slug,
             status=ShipmentStatus.NEW.value,
-            **kwargs,
+            **repo_kwargs,
         )
+
         provider = self._get_provider(shipment)
-        result = await self._call_provider(
-            provider.create_shipment(
-                sender_address=sender_address,
-                receiver_address=receiver_address,
-                parcels=parcels,
-                **kwargs,
+        try:
+            result = await self._call_provider(
+                provider.create_shipment(
+                    sender_address=sender_address,
+                    receiver_address=receiver_address,
+                    parcels=parcels,
+                    **kwargs,
+                )
             )
-        )
+        except Exception:
+            # Rollback: delete the partial record if the provider call fails.
+            await self.repository.delete(shipment.id)
+            raise
         shipment.external_id = str(result.get("external_id", ""))
         shipment.tracking_number = str(result.get("tracking_number", ""))
         transition_shipment(shipment, ShipmentStatus.CREATED)
@@ -175,18 +217,17 @@ class ShipmentFlow:
         return await self.repository.save(shipment)
 
     async def _call_provider(self, coro: Any) -> Any:
-        """Call a provider coroutine, wrapping non-domain errors."""
+        """Call a provider coroutine, wrapping only network errors.
+
+        Domain errors (ValueError, KeyError, TypeError, etc.) are re-raised
+        as-is so they are distinguishable from communication failures.
+        """
 
         try:
             return await coro
         except SendParcelException:
             raise
         except httpx.HTTPError as exc:
-            raise CommunicationError(
-                str(exc),
-                context={"original_error": type(exc).__name__},
-            ) from exc
-        except Exception as exc:
             raise CommunicationError(
                 str(exc),
                 context={"original_error": type(exc).__name__},
