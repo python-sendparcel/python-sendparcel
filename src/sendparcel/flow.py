@@ -22,6 +22,7 @@ from sendparcel.provider import (
     PullStatusProvider,
     PushCallbackProvider,
 )
+from sendparcel.registry import PluginRegistry, registry as default_registry
 from sendparcel.types import (
     AddressInfo,
     CreateLabelOutcome,
@@ -41,13 +42,11 @@ class ShipmentFlow:
         repository: ShipmentRepository,
         config: dict[str, Any] | None = None,
         validators: list[Any] | None = None,
-        registry: Any = None,
+        registry: PluginRegistry | None = None,
     ) -> None:
         self.repository = repository
         self.config = config or {}
         self.validators = validators or []
-        from sendparcel.registry import registry as default_registry
-
         self.registry = registry or default_registry
 
     async def create_shipment(
