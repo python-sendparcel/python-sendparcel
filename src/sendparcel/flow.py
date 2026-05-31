@@ -61,14 +61,25 @@ class ShipmentFlow:
     ) -> CreateShipmentOutcome:
         """Create a shipment record with explicit address and parcel data.
 
+        Uses persistence-enforced idempotency: if a shipment with the same
+        provider + idempotency_key already exists, it is returned without
+        calling the provider again.
+
+        On provider failure:
+        - CommunicationError (timeout, network): marks shipment as
+          ``SUBMITTED`` (ambiguous — provider may have accepted).
+          The caller should reconcile via polling or callback.
+        - Other errors: marks shipment as ``FAILED`` and re-raises.
+
+        The shipment record is never deleted on failure, ensuring that
+        retries and reconciliation always have a record to work with.
+
         Args:
             provider_slug: Provider identifier.
             sender_address: Sender address info.
             receiver_address: Receiver address info.
             parcels: List of parcel definitions.
-            idempotency_key: Optional key for retry safety. If a shipment
-                with this key already exists, it is returned without
-                calling the provider again. The key is stored in the
+            idempotency_key: Optional key for retry safety. Stored in the
                 ``reference_id`` field of the shipment record.
             **kwargs: Passed to the provider (after repo-only fields
                 are stripped).
@@ -89,19 +100,25 @@ class ShipmentFlow:
         if idempotency_key is not None:
             repo_kwargs.setdefault("reference_id", idempotency_key)
 
-        # Check for existing shipment with same idempotency key.
+        # Create shipment — use atomic idempotency if key provided.
         if idempotency_key is not None:
-            existing = await self.repository.find_by_reference(
-                provider_slug, idempotency_key
+            existing, created = (
+                await self.repository.create_with_idempotency_key(
+                    provider=provider_slug,
+                    status=ShipmentStatus.NEW.value,
+                    **repo_kwargs,
+                )
             )
             if existing is not None:
                 return CreateShipmentOutcome(shipment=existing, label=None)
-
-        shipment = await self.repository.create(
-            provider=provider_slug,
-            status=ShipmentStatus.NEW.value,
-            **repo_kwargs,
-        )
+            assert created is not None
+            shipment = created
+        else:
+            shipment = await self.repository.create(
+                provider=provider_slug,
+                status=ShipmentStatus.NEW.value,
+                **repo_kwargs,
+            )
 
         provider = self._get_provider(shipment)
         try:
@@ -113,10 +130,19 @@ class ShipmentFlow:
                     **kwargs,
                 )
             )
+        except CommunicationError:
+            # Ambiguous: provider may have accepted the shipment
+            # (e.g. timeout after acceptance). Mark as SUBMITTED for
+            # reconciliation via polling or callback.
+            transition_shipment(shipment, ShipmentStatus.SUBMITTED)
+            await self.repository.save(shipment)
+            return CreateShipmentOutcome(shipment=shipment, label=None)
         except Exception:
-            # Rollback: delete the partial record if the provider call fails.
-            await self.repository.delete(shipment.id)
+            # Non-communication error: mark as FAILED, never delete.
+            transition_shipment(shipment, ShipmentStatus.FAILED)
+            await self.repository.save(shipment)
             raise
+
         shipment.external_id = str(result.get("external_id", ""))
         shipment.tracking_number = str(result.get("tracking_number", ""))
         transition_shipment(shipment, ShipmentStatus.CREATED)
@@ -238,10 +264,12 @@ class ShipmentFlow:
                 context={"original_error": type(exc).__name__},
             ) from exc
         except ExceptionGroup as exc:
-            # Flatten any nested exceptions and wrap the group.
+            # Preserve typed inner exceptions: if any inner exception is a
+            # SendParcelException, re-raise it directly. Otherwise wrap the
+            # entire group in a CommunicationError.
             for e in exc.exceptions:
                 if isinstance(e, SendParcelException):
-                    raise
+                    raise e from exc
             raise CommunicationError(
                 str(exc),
                 context={"original_error": type(exc).__name__},

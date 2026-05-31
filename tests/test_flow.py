@@ -247,15 +247,17 @@ class TestCreateShipment:
 
     @pytest.mark.asyncio
     async def test_provider_error_is_wrapped(self) -> None:
+        """CommunicationError marks shipment as SUBMITTED for reconciliation."""
         flow, _ = _register_and_flow(BrokenProvider)
 
-        with pytest.raises(CommunicationError, match="connection refused"):
-            await flow.create_shipment(
-                "broken",
-                sender_address=_SENDER,
-                receiver_address=_RECEIVER,
-                parcels=_PARCELS,
-            )
+        outcome = await flow.create_shipment(
+            "broken",
+            sender_address=_SENDER,
+            receiver_address=_RECEIVER,
+            parcels=_PARCELS,
+        )
+        assert outcome.shipment.status == "submitted"
+        assert outcome.label is None
 
     @pytest.mark.asyncio
     async def test_non_http_exception_propagates_as_is(self) -> None:
@@ -425,18 +427,20 @@ class TestCancelShipment:
 
 class TestCreateShipmentRollback:
     @pytest.mark.asyncio
-    async def test_provider_failure_deletes_partial_record(self) -> None:
-        """If the provider call fails, the partial record must be deleted."""
+    async def test_provider_failure_marks_submitted_not_deleted(self) -> None:
+        """If the provider call fails with CommunicationError, the record
+        is marked as SUBMITTED (not deleted), enabling reconciliation."""
         flow, repository = _register_and_flow(RollbackProvider)
 
-        with pytest.raises(CommunicationError, match="provider unavailable"):
-            await flow.create_shipment(
-                "rollback",
-                sender_address=_SENDER,
-                receiver_address=_RECEIVER,
-                parcels=_PARCELS,
-            )
+        outcome = await flow.create_shipment(
+            "rollback",
+            sender_address=_SENDER,
+            receiver_address=_RECEIVER,
+            parcels=_PARCELS,
+        )
 
-        # The partial record should have been deleted.
+        # The partial record must NOT be deleted.
         assert repository.create_count == 1
-        assert len(repository._store) == 0
+        assert len(repository._store) == 1
+        # The shipment should be marked as SUBMITTED for reconciliation.
+        assert outcome.shipment.status == "submitted"

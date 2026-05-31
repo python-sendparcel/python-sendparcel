@@ -12,6 +12,7 @@ ALLOWED_STATUS_TRANSITIONS: dict[ShipmentStatus, frozenset[ShipmentStatus]] = {
             ShipmentStatus.CREATED,
             ShipmentStatus.CANCELLED,
             ShipmentStatus.FAILED,
+            ShipmentStatus.SUBMITTED,
         }
     ),
     ShipmentStatus.CREATED: frozenset(
@@ -54,6 +55,12 @@ ALLOWED_STATUS_TRANSITIONS: dict[ShipmentStatus, frozenset[ShipmentStatus]] = {
     ShipmentStatus.CANCELLED: frozenset(),
     ShipmentStatus.FAILED: frozenset(),
     ShipmentStatus.RETURNED: frozenset(),
+    ShipmentStatus.SUBMITTED: frozenset(
+        {
+            ShipmentStatus.CREATED,
+            ShipmentStatus.FAILED,
+        }
+    ),
 }
 
 

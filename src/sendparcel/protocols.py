@@ -28,3 +28,20 @@ class ShipmentRepository(Protocol):
     async def find_by_reference(
         self, provider: str, reference_id: str
     ) -> Shipment | None: ...
+    async def create_with_idempotency_key(
+        self,
+        provider: str,
+        status: str,
+        reference_id: str,
+        **kwargs: Any,
+    ) -> tuple[Shipment | None, Shipment | None]:
+        """Atomically check for existing + create if absent.
+
+        Returns:
+            (existing, created) — exactly one is None.
+            If a shipment with this provider + reference_id already
+            exists, returns (existing, None).
+            If no such shipment exists, creates one and returns
+            (None, created).
+        """
+        ...

@@ -11,6 +11,7 @@ class DemoShipment:
     provider = "dummy"
     external_id = ""
     tracking_number = ""
+    reference_id = ""
 
 
 class DemoRepository:
@@ -39,6 +40,15 @@ class DemoRepository:
         self, provider: str, reference_id: str
     ) -> DemoShipment | None:
         return None
+
+    async def create_with_idempotency_key(
+        self,
+        provider: str,
+        status: str,
+        reference_id: str,
+        **kwargs: Any,
+    ) -> tuple[DemoShipment | None, DemoShipment | None]:
+        return (None, DemoShipment())
 
 
 def test_runtime_protocol_checks_shipment_without_label_url() -> None:

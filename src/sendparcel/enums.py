@@ -15,6 +15,7 @@ class ShipmentStatus(StrEnum):
     CANCELLED = "cancelled"
     FAILED = "failed"
     RETURNED = "returned"
+    SUBMITTED = "submitted"
 
 
 class LabelFormat(StrEnum):

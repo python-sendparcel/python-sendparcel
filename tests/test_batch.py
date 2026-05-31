@@ -32,12 +32,14 @@ class MockShipment:
         provider: str = "dummy",
         external_id: str = "",
         tracking_number: str = "",
+        reference_id: str = "",
     ) -> None:
         self.id = id
         self.status = status
         self.provider = provider
         self.external_id = external_id
         self.tracking_number = tracking_number
+        self.reference_id = reference_id
 
 
 class MockRepository(ShipmentRepository):
@@ -90,6 +92,28 @@ class MockRepository(ShipmentRepository):
             ):
                 return shipment
         return None
+
+    async def create_with_idempotency_key(
+        self,
+        provider: str,
+        status: str,
+        reference_id: str,
+        **kwargs: Any,
+    ) -> tuple[Shipment | None, Shipment | None]:
+        """Atomically check for existing + create if absent."""
+        existing = await self.find_by_reference(provider, reference_id)
+        if existing is not None:
+            return (existing, None)
+        self._counter += 1
+        shipment = MockShipment(
+            id=str(self._counter),
+            status=status,
+            provider=provider,
+            reference_id=reference_id,
+            **{k: v for k, v in kwargs.items() if k != "reference_id"},
+        )
+        self._shipments[shipment.id] = shipment
+        return (None, shipment)
 
 
 class DummyProvider(CancellableProvider, PullStatusProvider):
