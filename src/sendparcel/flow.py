@@ -166,7 +166,9 @@ class ShipmentFlow:
             )
         label = await self._call_provider(provider.create_label(**kwargs))
         transition_shipment(shipment, ShipmentStatus.LABEL_READY)
-        saved = await self.repository.save(shipment)
+        saved = await self.repository.update_fields(
+            shipment_id=shipment.id, status=shipment.status
+        )
         return CreateLabelOutcome(shipment=saved, label=label)
 
     async def handle_callback(
@@ -223,7 +225,9 @@ class ShipmentFlow:
         )
         if cancelled:
             transition_shipment(shipment, ShipmentStatus.CANCELLED)
-            await self.repository.save(shipment)
+            await self.repository.update_fields(
+                shipment_id=shipment.id, status=shipment.status
+            )
         return bool(cancelled)
 
     def _get_provider(self, shipment: Shipment) -> BaseProvider:
@@ -234,13 +238,22 @@ class ShipmentFlow:
     async def _apply_update(
         self, shipment: Shipment, update: ShipmentUpdateResult
     ) -> Shipment:
+        """Apply a normalized update to a shipment atomically.
+
+        Uses the atomic ``update_fields`` persistence primitive to
+        prevent concurrent read-modify-save races.
+        """
+        fields: dict[str, Any] = {}
         tracking_number = update.get("tracking_number")
         if tracking_number:
-            shipment.tracking_number = str(tracking_number)
+            fields["tracking_number"] = str(tracking_number)
         status = update.get("status")
         if status is not None:
             transition_shipment(shipment, status)
-        return await self.repository.save(shipment)
+            fields["status"] = shipment.status
+        return await self.repository.update_fields(
+            shipment_id=shipment.id, **fields
+        )
 
     async def _call_provider(self, coro: Any) -> Any:
         """Call a provider coroutine, wrapping only network errors.

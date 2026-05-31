@@ -159,7 +159,8 @@ async def test_full_flow_uses_payload_outcomes_without_persisted_label() -> (
         "tracking_events": [{"code": "callback"}],
     }
     assert polled.shipment.status == "delivered"
-    assert repository.save_count == 4
+    assert repository.save_count == 1
+    assert repository.update_fields_count == 3
 
 
 @pytest.mark.asyncio

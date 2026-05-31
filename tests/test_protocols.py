@@ -50,6 +50,13 @@ class DemoRepository:
     ) -> tuple[DemoShipment | None, DemoShipment | None]:
         return (None, DemoShipment())
 
+    async def update_fields(self, shipment_id: str, **fields: Any) -> DemoShipment:
+        """Atomically update shipment fields by ID."""
+        shipment = DemoShipment()
+        for key, value in fields.items():
+            setattr(shipment, key, value)
+        return shipment
+
 
 def test_runtime_protocol_checks_shipment_without_label_url() -> None:
     assert isinstance(DemoShipment(), Shipment)

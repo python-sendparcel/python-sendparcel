@@ -45,3 +45,24 @@ class ShipmentRepository(Protocol):
             (None, created).
         """
         ...
+    async def update_fields(
+        self, shipment_id: str, **fields: Any
+    ) -> Shipment:
+        """Atomically update shipment fields by ID.
+
+        This is the atomic persistence primitive for callback and
+        polling flows. Unlike save() which mutates an in-memory
+        object, this performs a single atomic update operation,
+        preventing concurrent read-modify-save races.
+
+        Args:
+            shipment_id: The shipment to update.
+            **fields: Fields to update (e.g. status, tracking_number).
+
+        Returns:
+            The updated shipment object.
+
+        Raises:
+            ShipmentNotFoundError: If no shipment with this ID exists.
+        """
+        ...

@@ -115,6 +115,15 @@ class MockRepository(ShipmentRepository):
         self._shipments[shipment.id] = shipment
         return (None, shipment)
 
+    async def update_fields(self, shipment_id: str, **fields: Any) -> Shipment:
+        """Atomically update shipment fields by ID."""
+        if shipment_id not in self._shipments:
+            raise ShipmentNotFoundError(shipment_id)
+        shipment = self._shipments[shipment_id]
+        for key, value in fields.items():
+            setattr(shipment, key, value)
+        return shipment
+
 
 class DummyProvider(CancellableProvider, PullStatusProvider):
     """Mock provider for testing."""
