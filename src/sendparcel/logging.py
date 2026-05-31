@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -50,8 +50,8 @@ class _JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         extra = _format_extra(getattr(record, "extra", None))
-        log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+        log_entry: dict[str, Any] = {
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -110,7 +110,7 @@ def get_logger(
     name: str | None = None,
     *,
     extra: dict[str, Any] | None = None,
-) -> logging.LoggerAdapter:
+) -> logging.LoggerAdapter[logging.Logger]:
     """Get a structured logger for the sendparcel ecosystem.
 
     Args:

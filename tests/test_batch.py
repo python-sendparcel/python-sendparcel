@@ -9,6 +9,7 @@ from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import ShipmentNotFoundError
 from sendparcel.logging import get_logger
 from sendparcel.protocols import Shipment, ShipmentRepository
+from sendparcel.registry import PluginRegistry
 from sendparcel.provider import CancellableProvider, PullStatusProvider
 from sendparcel.types import (
     AddressInfo,
@@ -27,7 +28,7 @@ class MockShipment:
     def __init__(
         self,
         id: str = "1",
-        status: ShipmentStatus = ShipmentStatus.NEW,
+        status: str = "new",
         provider: str = "dummy",
         external_id: str = "",
         tracking_number: str = "",
@@ -43,25 +44,25 @@ class MockRepository(ShipmentRepository):
     """Mock repository for testing batch operations."""
 
     def __init__(self) -> None:
-        self._shipments: dict[str, MockShipment] = {}
+        self._shipments: dict[str, Shipment] = {}
         self._counter = 0
 
-    async def get_by_id(self, shipment_id: str) -> MockShipment:
+    async def get_by_id(self, shipment_id: str) -> Shipment:
         if shipment_id not in self._shipments:
             raise ShipmentNotFoundError(shipment_id)
         return self._shipments[shipment_id]
 
-    async def create(self, **kwargs: Any) -> MockShipment:
+    async def create(self, **kwargs: Any) -> Shipment:
         self._counter += 1
         shipment = MockShipment(
             id=str(self._counter),
-            status=ShipmentStatus.NEW,
+            status="new",
             provider=kwargs.get("provider", "dummy"),
         )
         self._shipments[shipment.id] = shipment
         return shipment
 
-    async def save(self, shipment: MockShipment) -> MockShipment:
+    async def save(self, shipment: Shipment) -> Shipment:
         self._shipments[shipment.id] = shipment
         return shipment
 
@@ -70,18 +71,18 @@ class MockRepository(ShipmentRepository):
 
     async def update_status(
         self, shipment_id: str, status: str, **fields: Any
-    ) -> MockShipment:
+    ) -> Shipment:
         if shipment_id not in self._shipments:
             raise ShipmentNotFoundError(shipment_id)
         shipment = self._shipments[shipment_id]
-        shipment.status = ShipmentStatus(status)
+        shipment.status = status
         for key, value in fields.items():
             setattr(shipment, key, value)
         return shipment
 
     async def find_by_reference(
         self, provider: str, reference_id: str
-    ) -> MockShipment | None:
+    ) -> Shipment | None:
         for shipment in self._shipments.values():
             if (
                 shipment.provider == provider
@@ -274,7 +275,7 @@ async def test_create_shipments_with_invalid_provider(
     assert results.successful == 0
     assert results.failed == 1
     assert not results.success
-    assert "nonexistent" in results.results[0].error
+    assert "nonexistent" in (results.results[0].error or "")
 
 
 async def test_create_shipments_partial_failure(

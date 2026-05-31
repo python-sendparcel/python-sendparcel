@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import asyncio
 import httpx
 
 from sendparcel.enums import ShipmentStatus
@@ -22,7 +21,8 @@ from sendparcel.provider import (
     PullStatusProvider,
     PushCallbackProvider,
 )
-from sendparcel.registry import PluginRegistry, registry as default_registry
+from sendparcel.registry import PluginRegistry
+from sendparcel.registry import registry as default_registry
 from sendparcel.types import (
     AddressInfo,
     CreateLabelOutcome,
@@ -232,7 +232,7 @@ class ShipmentFlow:
                 str(exc),
                 context={"original_error": type(exc).__name__},
             ) from exc
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise CommunicationError(
                 str(exc),
                 context={"original_error": type(exc).__name__},

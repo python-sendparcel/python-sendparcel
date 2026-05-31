@@ -41,7 +41,6 @@ __all__ = [
     "CreateLabelOutcome",
     "CreateShipmentOutcome",
     "DummyProvider",
-    "get_logger",
     "InvalidCallbackError",
     "InvalidTransitionError",
     "LabelFormat",
@@ -58,5 +57,6 @@ __all__ = [
     "ShipmentUpdateOutcome",
     "ShipmentUpdateResult",
     "__version__",
+    "get_logger",
     "registry",
 ]
