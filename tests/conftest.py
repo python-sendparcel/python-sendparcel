@@ -34,7 +34,16 @@ class InMemoryRepository:
         self.update_fields_count = 0
         self.create_count = 0
 
-    async def get_by_id(self, shipment_id: str) -> Shipment:
+    def get_by_id_sync(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> Shipment:
+        if shipment_id not in self._store:
+            raise ShipmentNotFoundError(shipment_id)
+        return self._store[shipment_id]
+
+    async def get_by_id(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> Shipment:
         if shipment_id not in self._store:
             raise ShipmentNotFoundError(shipment_id)
         return self._store[shipment_id]
@@ -96,6 +105,14 @@ class InMemoryRepository:
             setattr(shipment, key, value)
         self.update_fields_count += 1
         return shipment
+
+    async def find_by_reference(
+        self, provider: str, reference_id: str
+    ) -> Shipment | None:
+        for existing in self._store.values():
+            if getattr(existing, "reference_id", None) == reference_id:
+                return existing
+        return None
 
     async def delete(self, shipment_id: str) -> None:
         self._store.pop(shipment_id, None)

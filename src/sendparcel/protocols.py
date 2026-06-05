@@ -18,7 +18,15 @@ class Shipment(Protocol):
 class ShipmentRepository(Protocol):
     """Persistence abstraction for adapters."""
 
-    async def get_by_id(self, shipment_id: str) -> Shipment: ...
+    def get_by_id_sync(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> Shipment:
+        """Synchronous fetch — required for transactional helpers."""
+        ...
+
+    async def get_by_id(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> Shipment: ...
     async def create(self, **kwargs: Any) -> Shipment: ...
     async def save(self, shipment: Shipment) -> Shipment: ...
     async def update_status(
@@ -45,9 +53,8 @@ class ShipmentRepository(Protocol):
             (None, created).
         """
         ...
-    async def update_fields(
-        self, shipment_id: str, **fields: Any
-    ) -> Shipment:
+
+    async def update_fields(self, shipment_id: str, **fields: Any) -> Shipment:
         """Atomically update shipment fields by ID.
 
         This is the atomic persistence primitive for callback and

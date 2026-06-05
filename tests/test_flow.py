@@ -9,7 +9,6 @@ import pytest
 from conftest import InMemoryRepository
 from sendparcel.enums import LabelFormat
 from sendparcel.exceptions import (
-    CommunicationError,
     InvalidCallbackError,
     InvalidTransitionError,
     ProviderCapabilityError,

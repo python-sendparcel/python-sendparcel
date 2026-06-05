@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
-from sendparcel.enums import ShipmentStatus
+
+from sendparcel.enums import ConfirmationMethod, ShipmentStatus
 from sendparcel.exceptions import ShipmentNotFoundError
 from sendparcel.logging import get_logger
 from sendparcel.protocols import Shipment, ShipmentRepository
+from sendparcel.provider import (
+    BaseProvider,
+    CancellableProvider,
+    PullStatusProvider,
+)
 from sendparcel.registry import PluginRegistry
-from sendparcel.provider import CancellableProvider, PullStatusProvider
 from sendparcel.types import (
     AddressInfo,
-    CreateShipmentOutcome,
     ParcelInfo,
-    ShipmentUpdateOutcome,
+    ShipmentCreateResult,
     ShipmentUpdateResult,
 )
 
@@ -27,7 +31,7 @@ class MockShipment:
 
     def __init__(
         self,
-        id: str = "1",
+        id: str = "1",  # noqa: A002
         status: str = "new",
         provider: str = "dummy",
         external_id: str = "",
@@ -49,7 +53,16 @@ class MockRepository(ShipmentRepository):
         self._shipments: dict[str, Shipment] = {}
         self._counter = 0
 
-    async def get_by_id(self, shipment_id: str) -> Shipment:
+    def get_by_id_sync(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> Shipment:
+        if shipment_id not in self._shipments:
+            raise ShipmentNotFoundError(shipment_id)
+        return self._shipments[shipment_id]
+
+    async def get_by_id(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> Shipment:
         if shipment_id not in self._shipments:
             raise ShipmentNotFoundError(shipment_id)
         return self._shipments[shipment_id]
@@ -125,65 +138,51 @@ class MockRepository(ShipmentRepository):
         return shipment
 
 
-class DummyProvider(CancellableProvider, PullStatusProvider):
+class DummyProvider(
+    BaseProvider,
+    CancellableProvider,
+    PullStatusProvider,
+):
     """Mock provider for testing."""
 
-    slug = "test-dummy"
-    display_name = "Test Dummy"
-    supported_countries = ["PL"]
-    confirmation_method = "push"
-    user_selectable = True
+    slug: ClassVar[str] = "test-dummy"
+    display_name: ClassVar[str] = "Test Dummy"
+    supported_countries: ClassVar[list[str]] = ["PL"]
+    confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.PUSH
+    user_selectable: ClassVar[bool] = True
+    config_schema: ClassVar[dict[str, Any]] = {}
 
-    def __init__(
-        self,
-        shipment: Any,
-        config: dict[str, Any] | None = None,
-    ) -> None:
-        self.shipment = shipment
-        self.config = config or {}
-
-    @classmethod
-    def config_schema(cls) -> dict[str, Any]:
-        return {}
-
-    @classmethod
-    def get_setting(cls, key: str, default: Any = None) -> Any:
-        return cls.config.get(key, default) if hasattr(cls, "config") else default
-
-    @classmethod
     async def create_shipment(
-        cls,
+        self,
         *,
         sender_address: AddressInfo,
         receiver_address: AddressInfo,
         parcels: list[ParcelInfo],
         **kwargs: Any,
-    ) -> dict[str, Any]:
+    ) -> ShipmentCreateResult:
         return {"external_id": "ext-1", "tracking_number": "TRK-123"}
 
-    @classmethod
     async def verify_callback(
-        cls, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
     ) -> None:
         pass
 
-    @classmethod
     async def handle_callback(
-        cls, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
     ) -> ShipmentUpdateResult:
         return {"status": ShipmentStatus.IN_TRANSIT}
 
-    @classmethod
-    async def fetch_shipment_status(cls, **kwargs: Any) -> ShipmentUpdateResult:
+    async def fetch_shipment_status(
+        self, **kwargs: Any
+    ) -> ShipmentUpdateResult:
         return {"status": ShipmentStatus.CREATED}
 
-    @classmethod
-    async def cancel_shipment(cls, **kwargs: Any) -> bool:
+    async def cancel_shipment(self, **kwargs: Any) -> bool:
         return True
 
 
 @pytest.fixture
-def registry():
+def registry() -> PluginRegistry:
     """Create a registry with the dummy provider."""
     from sendparcel.registry import PluginRegistry
 
@@ -193,7 +192,7 @@ def registry():
 
 
 @pytest.fixture
-def repository():
+def repository() -> MockRepository:
     """Create a mock repository."""
     return MockRepository()
 

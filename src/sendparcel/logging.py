@@ -75,17 +75,21 @@ class _HumanFormatter(logging.Formatter):
         return super().format(record)
 
 
-def _configure_structured_logging(
+def configure_logging(
     level: int = logging.INFO,
     json_format: bool | None = None,
 ) -> None:
     """Configure structured logging for the sendparcel package.
 
+    Call this once at application startup (e.g. Django ``AppConfig.ready()``,
+    FastAPI lifespan, or a CLI ``__main__.py``) to enable JSON-formatted
+    structured logging for all sendparcel packages.
+
     Args:
         level: Logging level (default: INFO).
         json_format: Force JSON format (True/False). If None, uses
-            JSON in production (LOG_LEVEL env var set), human-readable
-            in development.
+            JSON when the ``SENDPARCEL_LOG_FORMAT`` environment variable
+            is set to ``"json"``, human-readable otherwise.
     """
     if json_format is None:
         json_format = os.environ.get("SENDPARCEL_LOG_FORMAT") == "json"
@@ -141,5 +145,11 @@ def get_logger(
     return adapter
 
 
-# Configure on first import.
-_configure_structured_logging()
+# NOTE: Logging is NOT configured on import.  Call
+# ``sendparcel.configure_logging()`` explicitly from your application
+# startup code (e.g. Django ``AppConfig.ready()``) to enable structured
+# logging for the sendparcel packages.
+#
+# Alias for backwards compatibility with any code that imported
+# ``_configure_structured_logging`` directly (pre-0.1.2).
+_configure_structured_logging = configure_logging

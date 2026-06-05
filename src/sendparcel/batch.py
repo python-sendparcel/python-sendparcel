@@ -132,9 +132,7 @@ class ShipmentBatch:
             index: int, shipment_data: dict[str, Any]
         ) -> BatchResult:
             async with semaphore:
-                return await self._create_single_shipment(
-                    index, shipment_data
-                )
+                return await self._create_single_shipment(index, shipment_data)
 
         results = await asyncio.gather(
             *(_create_one(i, d) for i, d in enumerate(shipments))
@@ -178,9 +176,17 @@ class ShipmentBatch:
                 sender_address=shipment_data["sender_address"],
                 receiver_address=shipment_data["receiver_address"],
                 parcels=shipment_data["parcels"],
-                **{k: v for k, v in shipment_data.items()
-                   if k not in ("provider_slug", "sender_address",
-                                "receiver_address", "parcels")},
+                **{
+                    k: v
+                    for k, v in shipment_data.items()
+                    if k
+                    not in (
+                        "provider_slug",
+                        "sender_address",
+                        "receiver_address",
+                        "parcels",
+                    )
+                },
             )
 
             logger.info(

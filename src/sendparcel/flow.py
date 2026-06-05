@@ -102,16 +102,21 @@ class ShipmentFlow:
 
         # Create shipment — use atomic idempotency if key provided.
         if idempotency_key is not None:
-            existing, created = (
-                await self.repository.create_with_idempotency_key(
-                    provider=provider_slug,
-                    status=ShipmentStatus.NEW.value,
-                    **repo_kwargs,
-                )
+            (
+                existing,
+                created,
+            ) = await self.repository.create_with_idempotency_key(
+                provider=provider_slug,
+                status=ShipmentStatus.NEW.value,
+                **repo_kwargs,
             )
             if existing is not None:
                 return CreateShipmentOutcome(shipment=existing, label=None)
-            assert created is not None
+            if created is None:
+                raise RuntimeError(
+                    "create_with_idempotency_key returned (None, None) "
+                    "— repository contract violated"
+                )
             shipment = created
         else:
             shipment = await self.repository.create(

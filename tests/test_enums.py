@@ -24,3 +24,24 @@ def test_shipment_status_values() -> None:
     assert ShipmentStatus.CANCELLED.value == "cancelled"
     assert ShipmentStatus.FAILED.value == "failed"
     assert ShipmentStatus.RETURNED.value == "returned"
+    assert ShipmentStatus.SUBMITTED.value == "submitted"
+
+
+def test_shipment_status_str_enum() -> None:
+    """ShipmentStatus members are valid StrEnum values."""
+    for status in ShipmentStatus:
+        assert isinstance(status.value, str)
+        # StrEnum allows comparison with strings
+        assert status == status.value
+
+
+def test_submitted_state_transitions() -> None:
+    """SUBMITTED can transition to CREATED or FAILED only."""
+    from sendparcel.fsm import ALLOWED_STATUS_TRANSITIONS
+
+    allowed = ALLOWED_STATUS_TRANSITIONS[ShipmentStatus.SUBMITTED]
+    assert ShipmentStatus.CREATED in allowed
+    assert ShipmentStatus.FAILED in allowed
+    # Terminal states should NOT be reachable from SUBMITTED
+    assert ShipmentStatus.DELIVERED not in allowed
+    assert ShipmentStatus.CANCELLED not in allowed

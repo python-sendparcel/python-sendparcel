@@ -15,6 +15,11 @@ class DemoShipment:
 
 
 class DemoRepository:
+    def get_by_id_sync(
+        self, shipment_id: str, *, for_update: bool = False
+    ) -> DemoShipment:
+        return DemoShipment()
+
     async def get_by_id(self, shipment_id: str) -> DemoShipment:
         return DemoShipment()
 
@@ -50,7 +55,9 @@ class DemoRepository:
     ) -> tuple[DemoShipment | None, DemoShipment | None]:
         return (None, DemoShipment())
 
-    async def update_fields(self, shipment_id: str, **fields: Any) -> DemoShipment:
+    async def update_fields(
+        self, shipment_id: str, **fields: Any
+    ) -> DemoShipment:
         """Atomically update shipment fields by ID."""
         shipment = DemoShipment()
         for key, value in fields.items():

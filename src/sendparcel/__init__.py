@@ -14,7 +14,7 @@ from sendparcel.exceptions import (
     ShipmentNotFoundError,
 )
 from sendparcel.flow import ShipmentFlow
-from sendparcel.logging import get_logger
+from sendparcel.logging import configure_logging, get_logger
 from sendparcel.provider import (
     BaseProvider,
     CancellableProvider,
@@ -57,6 +57,7 @@ __all__ = [
     "ShipmentUpdateOutcome",
     "ShipmentUpdateResult",
     "__version__",
+    "configure_logging",
     "get_logger",
     "registry",
 ]
