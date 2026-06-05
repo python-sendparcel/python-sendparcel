@@ -82,6 +82,7 @@ ignore = ["N818", "B027"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["RUF012"]
+"docs/**" = ["A001"]
 
 [tool.ty.environment]
 python-version = "3.12"
