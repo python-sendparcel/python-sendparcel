@@ -53,11 +53,11 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sendparcel/python-sendparcel"
-Documentation = "https://python-sendparcel.readthedocs.io/"
-Repository = "https://github.com/sendparcel/python-sendparcel"
-Changelog = "https://github.com/sendparcel/python-sendparcel/blob/main/CHANGELOG.md"
-"Issue Tracker" = "https://github.com/sendparcel/python-sendparcel/issues"
+Homepage = "https://github.com/python-sendparcel/python-sendparcel"
+# Documentation = "https://python-sendparcel.readthedocs.io/"
+Repository = "https://github.com/python-sendparcel/python-sendparcel"
+Changelog = "https://github.com/python-sendparcel/python-sendparcel/blob/main/CHANGELOG.md"
+"Issue Tracker" = "https://github.com/python-sendparcel/python-sendparcel/issues"
 
 [build-system]
 requires = ["hatchling"]
