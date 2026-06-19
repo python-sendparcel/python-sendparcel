@@ -83,9 +83,6 @@ class ShipmentUpdateResult(TypedDict, total=False):
     tracking_events: list[TrackingEvent]
 
 
-ShipmentStatusResponse = ShipmentUpdateResult
-
-
 @dataclass(frozen=True, slots=True)
 class CreateShipmentOutcome:
     """Flow result for shipment creation."""

@@ -149,7 +149,3 @@ def get_logger(
 # ``sendparcel.configure_logging()`` explicitly from your application
 # startup code (e.g. Django ``AppConfig.ready()``) to enable structured
 # logging for the sendparcel packages.
-#
-# Alias for backwards compatibility with any code that imported
-# ``_configure_structured_logging`` directly (pre-0.1.2).
-_configure_structured_logging = configure_logging
