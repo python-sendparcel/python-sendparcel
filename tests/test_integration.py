@@ -18,6 +18,7 @@ from sendparcel.provider import (
 from sendparcel.registry import registry
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -68,15 +69,15 @@ class IntegrationProvider(
         return LabelInfo(format=LabelFormat.PDF, url="https://labels/int.pdf")
 
     async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, ctx: CallbackContext
     ) -> None:
         return None
 
     async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, ctx: CallbackContext
     ) -> ShipmentUpdateResult:
         return ShipmentUpdateResult(
-            status=str(data["status"]),
+            status=str(ctx.payload["status"]),
             tracking_events=[{"code": "callback"}],
         )
 
@@ -145,9 +146,13 @@ async def test_full_flow_uses_payload_outcomes_without_persisted_label() -> (
     assert labelled.shipment.status == "label_ready"
 
     callback = await flow.handle_callback(
-        labelled.shipment,
-        {"status": "in_transit"},
-        {},
+        CallbackContext(
+            shipment_id=labelled.shipment.id,
+            payload={"status": "in_transit"},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        ),
     )
     assert callback.shipment.status == "in_transit"
 
@@ -185,7 +190,13 @@ async def test_callback_and_polling_share_same_normalized_shape() -> None:
     ).shipment
 
     callback = await flow.handle_callback(
-        shipment, {"status": "in_transit"}, {}
+        CallbackContext(
+            shipment_id=shipment.id,
+            payload={"status": "in_transit"},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        ),
     )
     polled = await flow.fetch_and_update_status(callback.shipment)
 

@@ -17,6 +17,7 @@ from sendparcel.provider import (
 )
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -66,19 +67,15 @@ class DummyProvider(
         await self._simulate_latency()
         return LabelInfo(format=LabelFormat.PDF, url=self._label_url())
 
-    async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
+    async def verify_callback(self, ctx: CallbackContext) -> None:
         expected = self.get_setting("callback_token", "dummy-token")
-        provided = headers.get("x-dummy-token", "")
+        provided = ctx.headers.get("x-dummy-token", "")
         if provided != expected:
             raise InvalidCallbackError("BAD TOKEN")
 
-    async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> ShipmentUpdateResult:
+    async def handle_callback(self, ctx: CallbackContext) -> ShipmentUpdateResult:
         await self._simulate_latency()
-        status_value = data.get("status")
+        status_value = ctx.payload.get("status")
         if not status_value:
             return ShipmentUpdateResult()
         return ShipmentUpdateResult(status=str(status_value))

@@ -25,6 +25,7 @@ from sendparcel.registry import PluginRegistry
 from sendparcel.registry import registry as default_registry
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     CreateLabelOutcome,
     CreateShipmentOutcome,
     ParcelInfo,
@@ -92,7 +93,7 @@ class ShipmentFlow:
 
         # Separate repository kwargs from provider kwargs.
         repo_kwargs: dict[str, Any] = {}
-        for key in ("reference_id",):
+        for key in ("reference_id", "order"):
             if key in kwargs:
                 repo_kwargs[key] = kwargs.pop(key)
 
@@ -178,25 +179,26 @@ class ShipmentFlow:
 
     async def handle_callback(
         self,
-        shipment: Shipment,
-        data: dict[str, Any],
-        headers: dict[str, Any],
-        **kwargs: Any,
+        ctx: CallbackContext,
+        *,
+        shipment: Shipment | None = None,
     ) -> ShipmentUpdateOutcome:
-        """Verify and apply provider callback."""
+        """Verify and apply provider callback.
 
+        The caller is responsible for loading the shipment (from
+        ``ctx.shipment_id``) and passing it in. If ``shipment`` is not
+        provided, it will be loaded from the repository.
+        """
+        if shipment is None:
+            shipment = await self.repository.get_by_id(ctx.shipment_id)
         provider = self._get_provider(shipment)
         if not isinstance(provider, PushCallbackProvider):
             raise ProviderCapabilityError(
                 f"Provider {shipment.provider!r} does not support "
                 "push callbacks"
             )
-        await self._call_provider(
-            provider.verify_callback(data, headers, **kwargs)
-        )
-        update = await self._call_provider(
-            provider.handle_callback(data, headers, **kwargs)
-        )
+        await self._call_provider(provider.verify_callback(ctx))
+        update = await self._call_provider(provider.handle_callback(ctx))
         normalized_update = update or ShipmentUpdateResult()
         saved = await self._apply_update(shipment, normalized_update)
         return ShipmentUpdateOutcome(shipment=saved, update=normalized_update)

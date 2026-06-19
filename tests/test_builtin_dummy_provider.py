@@ -8,7 +8,7 @@ import pytest
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.exceptions import InvalidCallbackError
 from sendparcel.providers.dummy import DummyProvider
-from sendparcel.types import AddressInfo, ParcelInfo
+from sendparcel.types import AddressInfo, CallbackContext, ParcelInfo
 
 _SENDER = AddressInfo(
     name="Test Sender",
@@ -89,38 +89,56 @@ class TestVerifyCallback:
         provider = DummyProvider(
             DummyShipment(), config={"callback_token": "secret"}
         )
-
-        await provider.verify_callback({}, headers={"x-dummy-token": "secret"})
+        ctx = CallbackContext(
+            shipment_id="s-42",
+            payload={},
+            headers={"x-dummy-token": "secret"},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        )
+        await provider.verify_callback(ctx)
 
     @pytest.mark.asyncio
     async def test_rejects_wrong_token(self) -> None:
         provider = DummyProvider(
             DummyShipment(), config={"callback_token": "secret"}
         )
-
+        ctx = CallbackContext(
+            shipment_id="s-42",
+            payload={},
+            headers={"x-dummy-token": "wrong"},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        )
         with pytest.raises(InvalidCallbackError, match="BAD TOKEN"):
-            await provider.verify_callback(
-                {}, headers={"x-dummy-token": "wrong"}
-            )
+            await provider.verify_callback(ctx)
 
 
 class TestHandleCallback:
     @pytest.mark.asyncio
     async def test_returns_normalized_update(self) -> None:
         provider = DummyProvider(DummyShipment(status="created"), config={})
-
-        update = await provider.handle_callback(
-            {"status": "in_transit"}, headers={}
+        ctx = CallbackContext(
+            shipment_id="s-42",
+            payload={"status": "in_transit"},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
         )
-
+        update = await provider.handle_callback(ctx)
         assert update == {"status": "in_transit"}
 
     @pytest.mark.asyncio
     async def test_missing_status_returns_empty_update(self) -> None:
         provider = DummyProvider(DummyShipment(status="created"), config={})
-
-        update = await provider.handle_callback({}, headers={})
-
+        ctx = CallbackContext(
+            shipment_id="s-42",
+            payload={},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        )
+        update = await provider.handle_callback(ctx)
         assert update == {}
 
 

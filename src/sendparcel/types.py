@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import TypedDict
@@ -106,3 +108,31 @@ class ShipmentUpdateOutcome:
 
     shipment: Shipment
     update: ShipmentUpdateResult
+
+
+@dataclass(slots=True)
+class CallbackContext:
+    """Everything needed to process a webhook callback.
+
+    Framework layers build this in one place. Core operates on it.
+    The retry store persists this as a single blob.
+
+    The ``dedup_hash`` is computed from the payload alone (not headers
+    or source_ip) so that legitimate re-submissions of the same callback
+    data are deduplicated regardless of transport metadata.
+    """
+
+    shipment_id: str
+    payload: dict[str, Any]
+    headers: dict[str, str]
+    source_ip: str
+    raw_body: bytes
+    provider_slug: str = ""
+
+    @property
+    def dedup_hash(self) -> str:
+        """Deterministic SHA-256 hash of the payload for dedup checks."""
+        raw = json.dumps(
+            self.payload, sort_keys=True, default=str
+        ).encode("utf-8")
+        return hashlib.sha256(raw).hexdigest()

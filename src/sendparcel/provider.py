@@ -9,6 +9,7 @@ from sendparcel.enums import ConfirmationMethod
 from sendparcel.protocols import Shipment
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -62,15 +63,11 @@ class PushCallbackProvider(ABC):
     """Trait for providers that receive push notifications."""
 
     @abstractmethod
-    async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> None:
+    async def verify_callback(self, ctx: CallbackContext) -> None:
         """Verify callback authenticity."""
 
     @abstractmethod
-    async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
-    ) -> ShipmentUpdateResult:
+    async def handle_callback(self, ctx: CallbackContext) -> ShipmentUpdateResult:
         """Normalize callback data into a shipment update payload."""
 
 

@@ -25,6 +25,7 @@ from sendparcel.provider import (
 from sendparcel.registry import registry
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -75,15 +76,15 @@ class FlowProvider(
         return LabelInfo(format=LabelFormat.PDF, url="https://labels/123.pdf")
 
     async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, ctx: CallbackContext
     ) -> None:
-        if headers.get("x-flow-token") == "bad":
+        if ctx.headers.get("x-flow-token") == "bad":
             raise InvalidCallbackError("bad signature")
 
     async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, ctx: CallbackContext
     ) -> ShipmentUpdateResult:
-        status = str(data.get("status", "in_transit"))
+        status = str(ctx.payload.get("status", "in_transit"))
         return ShipmentUpdateResult(
             status=status,
             tracking_events=[{"code": "accepted"}],
@@ -324,11 +325,14 @@ class TestHandleCallback:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
-        outcome = await flow.handle_callback(
-            shipment,
-            {"status": "in_transit"},
-            {},
+        ctx = CallbackContext(
+            shipment_id=shipment.id,
+            payload={"status": "in_transit"},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
         )
+        outcome = await flow.handle_callback(ctx)
 
         assert outcome.shipment.status == "in_transit"
         assert outcome.update.get("status") == "in_transit"
@@ -339,26 +343,32 @@ class TestHandleCallback:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
+        ctx = CallbackContext(
+            shipment_id=shipment.id,
+            payload={"status": "in_transit"},
+            headers={"x-flow-token": "bad"},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        )
         with pytest.raises(InvalidCallbackError, match="bad signature"):
-            await flow.handle_callback(
-                shipment,
-                {"status": "in_transit"},
-                {"x-flow-token": "bad"},
-            )
+            await flow.handle_callback(ctx)
 
     @pytest.mark.asyncio
     async def test_unknown_status_is_rejected(self) -> None:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
 
+        ctx = CallbackContext(
+            shipment_id=shipment.id,
+            payload={"status": "teleported"},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        )
         with pytest.raises(
             InvalidTransitionError, match="Unknown shipment status"
         ):
-            await flow.handle_callback(
-                shipment,
-                {"status": "teleported"},
-                {},
-            )
+            await flow.handle_callback(ctx)
 
 
 class TestFetchAndUpdateStatus:
@@ -416,9 +426,14 @@ class TestCancelShipment:
     async def test_cancel_from_in_transit_is_rejected(self) -> None:
         flow, _ = _register_and_flow(FlowProvider)
         shipment = await _created_shipment(flow)
-        shipment = (
-            await flow.handle_callback(shipment, {"status": "in_transit"}, {})
-        ).shipment
+        ctx = CallbackContext(
+            shipment_id=shipment.id,
+            payload={"status": "in_transit"},
+            headers={},
+            source_ip="127.0.0.1",
+            raw_body=b"",
+        )
+        shipment = (await flow.handle_callback(ctx)).shipment
 
         with pytest.raises(InvalidTransitionError, match="cannot transition"):
             await flow.cancel_shipment(shipment)

@@ -18,6 +18,7 @@ from sendparcel.provider import (
 from sendparcel.registry import PluginRegistry
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     ParcelInfo,
     ShipmentCreateResult,
     ShipmentUpdateResult,
@@ -163,12 +164,12 @@ class DummyProvider(
         return {"external_id": "ext-1", "tracking_number": "TRK-123"}
 
     async def verify_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, ctx: CallbackContext
     ) -> None:
         pass
 
     async def handle_callback(
-        self, data: dict[str, Any], headers: dict[str, Any], **kwargs: Any
+        self, ctx: CallbackContext
     ) -> ShipmentUpdateResult:
         return {"status": ShipmentStatus.IN_TRANSIT}
 
