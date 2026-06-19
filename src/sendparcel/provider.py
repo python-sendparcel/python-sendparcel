@@ -1,4 +1,4 @@
-"""Base provider abstraction and capability trait mixins."""
+"""Base provider abstraction."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, ClassVar
 
 from sendparcel.enums import ConfirmationMethod
+from sendparcel.exceptions import ProviderCapabilityError
 from sendparcel.protocols import Shipment
 from sendparcel.types import (
     AddressInfo,
@@ -18,7 +19,17 @@ from sendparcel.types import (
 
 
 class BaseProvider(ABC):
-    """Base class for parcel delivery providers."""
+    """Base class for parcel delivery providers.
+
+    Capability methods (``create_label``, ``handle_callback``,
+    ``fetch_shipment_status``, ``cancel_shipment``) raise
+    :exc:`ProviderCapabilityError` by default.  Override only the
+    methods the provider supports.
+
+    The flow orchestrator calls capability methods directly — no
+    ``isinstance`` trait checks.  If a provider doesn't support a
+    capability, the default implementation raises.
+    """
 
     slug: ClassVar[str] = ""
     display_name: ClassVar[str] = ""
@@ -46,7 +57,6 @@ class BaseProvider(ABC):
 
     def get_setting(self, name: str, default: Any = None) -> Any:
         """Read provider setting from config."""
-
         return self.config.get(name, default)
 
     @abstractmethod
@@ -60,40 +70,57 @@ class BaseProvider(ABC):
     ) -> ShipmentCreateResult:
         """Create shipment in provider API."""
 
-
-class LabelProvider(ABC):
-    """Trait for providers that support label generation."""
-
-    @abstractmethod
     async def create_label(self, **kwargs: Any) -> LabelInfo:
-        """Create or fetch label payload for a shipment."""
+        """Create or fetch label payload for a shipment.
 
+        Raises :exc:`ProviderCapabilityError` if the provider does not
+        support label generation.
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "label creation"
+        )
 
-class PushCallbackProvider(ABC):
-    """Trait for providers that receive push notifications."""
-
-    @abstractmethod
     async def verify_callback(self, ctx: CallbackContext) -> None:
-        """Verify callback authenticity."""
+        """Verify callback authenticity.
 
-    @abstractmethod
+        Raises :exc:`ProviderCapabilityError` if the provider does not
+        support push callbacks.
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "push callbacks"
+        )
+
     async def handle_callback(self, ctx: CallbackContext) -> ShipmentUpdateResult:
-        """Normalize callback data into a shipment update payload."""
+        """Normalize callback data into a shipment update payload.
 
+        Raises :exc:`ProviderCapabilityError` if the provider does not
+        support push callbacks.
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "push callbacks"
+        )
 
-class PullStatusProvider(ABC):
-    """Trait for providers that support status polling."""
+    async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentUpdateResult:
+        """Fetch latest shipment update from provider.
 
-    @abstractmethod
-    async def fetch_shipment_status(
-        self, **kwargs: Any
-    ) -> ShipmentUpdateResult:
-        """Fetch latest shipment update from provider."""
+        Raises :exc:`ProviderCapabilityError` if the provider does not
+        support status polling.
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "status polling"
+        )
 
-
-class CancellableProvider(ABC):
-    """Trait for providers that support shipment cancellation."""
-
-    @abstractmethod
     async def cancel_shipment(self, **kwargs: Any) -> bool:
-        """Cancel shipment if provider supports cancellation."""
+        """Cancel shipment if provider supports cancellation.
+
+        Raises :exc:`ProviderCapabilityError` if the provider does not
+        support cancellation.
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "cancellation"
+        )

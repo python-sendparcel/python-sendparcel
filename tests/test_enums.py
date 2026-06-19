@@ -37,11 +37,9 @@ def test_shipment_status_str_enum() -> None:
 
 def test_submitted_state_transitions() -> None:
     """SUBMITTED can transition to CREATED or FAILED only."""
-    from sendparcel.fsm import ALLOWED_STATUS_TRANSITIONS
+    from sendparcel.fsm import can_transition
 
-    allowed = ALLOWED_STATUS_TRANSITIONS[ShipmentStatus.SUBMITTED]
-    assert ShipmentStatus.CREATED in allowed
-    assert ShipmentStatus.FAILED in allowed
-    # Terminal states should NOT be reachable from SUBMITTED
-    assert ShipmentStatus.DELIVERED not in allowed
-    assert ShipmentStatus.CANCELLED not in allowed
+    assert can_transition("submitted", "created") is True
+    assert can_transition("submitted", "failed") is True
+    assert can_transition("submitted", "delivered") is False
+    assert can_transition("submitted", "cancelled") is False

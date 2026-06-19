@@ -15,13 +15,7 @@ from sendparcel.exceptions import (
     ProviderNotFoundError,
 )
 from sendparcel.flow import ShipmentFlow
-from sendparcel.provider import (
-    BaseProvider,
-    CancellableProvider,
-    LabelProvider,
-    PullStatusProvider,
-    PushCallbackProvider,
-)
+from sendparcel.provider import BaseProvider
 from sendparcel.registry import registry
 from sendparcel.types import (
     AddressInfo,
@@ -49,13 +43,7 @@ _RECEIVER = AddressInfo(
 _PARCELS = [ParcelInfo(weight_kg=Decimal("1.0"))]
 
 
-class FlowProvider(
-    BaseProvider,
-    LabelProvider,
-    PushCallbackProvider,
-    PullStatusProvider,
-    CancellableProvider,
-):
+class FlowProvider(BaseProvider):
     slug = "flow"
     display_name = "Flow Provider"
 

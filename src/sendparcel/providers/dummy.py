@@ -8,13 +8,7 @@ import anyio
 
 from sendparcel.enums import ConfirmationMethod, LabelFormat
 from sendparcel.exceptions import InvalidCallbackError
-from sendparcel.provider import (
-    BaseProvider,
-    CancellableProvider,
-    LabelProvider,
-    PullStatusProvider,
-    PushCallbackProvider,
-)
+from sendparcel.provider import BaseProvider
 from sendparcel.types import (
     AddressInfo,
     CallbackContext,
@@ -25,13 +19,7 @@ from sendparcel.types import (
 )
 
 
-class DummyProvider(
-    BaseProvider,
-    LabelProvider,
-    PushCallbackProvider,
-    PullStatusProvider,
-    CancellableProvider,
-):
+class DummyProvider(BaseProvider):
     """Reference provider for local, development, and test usage."""
 
     slug: ClassVar[str] = "dummy"

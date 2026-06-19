@@ -10,11 +10,7 @@ from sendparcel.enums import ConfirmationMethod, ShipmentStatus
 from sendparcel.exceptions import ShipmentNotFoundError
 from sendparcel.logging import get_logger
 from sendparcel.protocols import Shipment, ShipmentRepository
-from sendparcel.provider import (
-    BaseProvider,
-    CancellableProvider,
-    PullStatusProvider,
-)
+from sendparcel.provider import BaseProvider
 from sendparcel.registry import PluginRegistry
 from sendparcel.types import (
     AddressInfo,
@@ -139,11 +135,7 @@ class MockRepository(ShipmentRepository):
         return shipment
 
 
-class DummyProvider(
-    BaseProvider,
-    CancellableProvider,
-    PullStatusProvider,
-):
+class DummyProvider(BaseProvider):
     """Mock provider for testing."""
 
     slug: ClassVar[str] = "test-dummy"

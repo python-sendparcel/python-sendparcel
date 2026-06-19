@@ -14,13 +14,7 @@ from sendparcel.exceptions import (
 )
 from sendparcel.fsm import transition_shipment
 from sendparcel.protocols import Shipment, ShipmentRepository
-from sendparcel.provider import (
-    BaseProvider,
-    CancellableProvider,
-    LabelProvider,
-    PullStatusProvider,
-    PushCallbackProvider,
-)
+from sendparcel.provider import BaseProvider
 from sendparcel.registry import PluginRegistry
 from sendparcel.registry import registry as default_registry
 from sendparcel.types import (
@@ -165,11 +159,6 @@ class ShipmentFlow:
 
         run_validators({"shipment": shipment}, validators=self.validators)
         provider = self._get_provider(shipment)
-        if not isinstance(provider, LabelProvider):
-            raise ProviderCapabilityError(
-                f"Provider {shipment.provider!r} does not support "
-                "label creation"
-            )
         label = await self._call_provider(provider.create_label(**kwargs))
         transition_shipment(shipment, ShipmentStatus.LABEL_READY)
         saved = await self.repository.update_fields(
@@ -192,11 +181,6 @@ class ShipmentFlow:
         if shipment is None:
             shipment = await self.repository.get_by_id(ctx.shipment_id)
         provider = self._get_provider(shipment)
-        if not isinstance(provider, PushCallbackProvider):
-            raise ProviderCapabilityError(
-                f"Provider {shipment.provider!r} does not support "
-                "push callbacks"
-            )
         await self._call_provider(provider.verify_callback(ctx))
         update = await self._call_provider(provider.handle_callback(ctx))
         normalized_update = update or ShipmentUpdateResult()
@@ -209,11 +193,6 @@ class ShipmentFlow:
         """Fetch status from provider and persist."""
 
         provider = self._get_provider(shipment)
-        if not isinstance(provider, PullStatusProvider):
-            raise ProviderCapabilityError(
-                f"Provider {shipment.provider!r} does not support "
-                "status polling"
-            )
         update = await self._call_provider(provider.fetch_shipment_status())
         normalized_update = update or ShipmentUpdateResult()
         saved = await self._apply_update(shipment, normalized_update)
@@ -223,10 +202,6 @@ class ShipmentFlow:
         """Cancel shipment via provider and persist state."""
 
         provider = self._get_provider(shipment)
-        if not isinstance(provider, CancellableProvider):
-            raise ProviderCapabilityError(
-                f"Provider {shipment.provider!r} does not support cancellation"
-            )
         cancelled = await self._call_provider(
             provider.cancel_shipment(**kwargs)
         )

@@ -6,7 +6,7 @@ from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import InvalidTransitionError
 from sendparcel.protocols import Shipment
 
-ALLOWED_STATUS_TRANSITIONS: dict[ShipmentStatus, frozenset[ShipmentStatus]] = {
+_ALLOWED_TRANSITIONS: dict[ShipmentStatus, frozenset[ShipmentStatus]] = {
     ShipmentStatus.NEW: frozenset(
         {
             ShipmentStatus.CREATED,
@@ -64,7 +64,7 @@ ALLOWED_STATUS_TRANSITIONS: dict[ShipmentStatus, frozenset[ShipmentStatus]] = {
 }
 
 
-def normalize_status(status: str | ShipmentStatus) -> ShipmentStatus:
+def _normalize(status: str | ShipmentStatus) -> ShipmentStatus:
     """Normalise a status to a :class:`ShipmentStatus` enum member."""
 
     try:
@@ -81,11 +81,11 @@ def can_transition(
 ) -> bool:
     """Check whether a shipment status transition is allowed."""
 
-    current = normalize_status(current_status)
-    target = normalize_status(target_status)
+    current = _normalize(current_status)
+    target = _normalize(target_status)
     if current == target:
         return True
-    return target in ALLOWED_STATUS_TRANSITIONS[current]
+    return target in _ALLOWED_TRANSITIONS[current]
 
 
 def transition_shipment(
@@ -93,12 +93,12 @@ def transition_shipment(
 ) -> Shipment:
     """Apply a validated status transition to a shipment."""
 
-    current = normalize_status(shipment.status)
-    target = normalize_status(target_status)
+    current = _normalize(shipment.status)
+    target = _normalize(target_status)
     if current == target:
         shipment.status = target.value
         return shipment
-    if target not in ALLOWED_STATUS_TRANSITIONS[current]:
+    if target not in _ALLOWED_TRANSITIONS[current]:
         raise InvalidTransitionError(
             f"Shipment cannot transition from {current!r} to {target!r}"
         )

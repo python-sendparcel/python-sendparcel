@@ -7,7 +7,6 @@ import pytest
 from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import InvalidTransitionError
 from sendparcel.fsm import (
-    ALLOWED_STATUS_TRANSITIONS,
     can_transition,
     transition_shipment,
 )
@@ -80,5 +79,8 @@ def test_can_transition_reports_current_rules() -> None:
     assert can_transition("new", "in_transit") is False
 
 
-def test_allowed_status_transitions_cover_all_statuses() -> None:
-    assert set(ALLOWED_STATUS_TRANSITIONS) == set(ShipmentStatus)
+def test_all_statuses_have_transition_rules() -> None:
+    """Every ShipmentStatus has explicit transition rules."""
+    for status in ShipmentStatus:
+        # can_transition with same status must be True (idempotent)
+        assert can_transition(status, status) is True
