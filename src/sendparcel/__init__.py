@@ -13,6 +13,7 @@ from sendparcel.exceptions import (
     SendParcelException,
     ShipmentNotFoundError,
 )
+from sendparcel.factory import create_provider
 from sendparcel.flow import ShipmentFlow
 from sendparcel.logging import configure_logging, get_logger
 from sendparcel.provider import (
@@ -44,6 +45,7 @@ __all__ = [
     "CreateShipmentOutcome",
     "DummyProvider",
     "InvalidCallbackError",
+    "create_provider",
     "InvalidTransitionError",
     "LabelFormat",
     "LabelProvider",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar
+from typing import Any, Callable, ClassVar
 
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.protocols import Shipment
@@ -27,12 +27,22 @@ class BaseProvider(ABC):
     confirmation_method: ClassVar[ConfirmationMethod] = ConfirmationMethod.NONE
     user_selectable: ClassVar[bool] = True
     config_schema: ClassVar[dict[str, Any]] = {}
+    transport_factory: ClassVar[Callable[..., Any] | None] = None
+    """Callable that builds a transport from config dict.
+    Signature: transport_factory(**config) -> transport.
+    None means the provider doesn't need HTTP transport (e.g. DummyProvider).
+    """
 
     def __init__(
-        self, shipment: Shipment, config: dict[str, Any] | None = None
+        self,
+        shipment: Shipment,
+        config: dict[str, Any] | None = None,
+        *,
+        transport: Any = None,
     ) -> None:
         self.shipment = shipment
         self.config = config or {}
+        self._transport = transport
 
     def get_setting(self, name: str, default: Any = None) -> Any:
         """Read provider setting from config."""

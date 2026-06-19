@@ -17,6 +17,7 @@ def test_public_api_exports_exact_set() -> None:
         "CreateShipmentOutcome",
         "DummyProvider",
         "configure_logging",
+        "create_provider",
         "get_logger",
         "InvalidCallbackError",
         "InvalidTransitionError",

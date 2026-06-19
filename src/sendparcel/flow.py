@@ -238,9 +238,11 @@ class ShipmentFlow:
         return bool(cancelled)
 
     def _get_provider(self, shipment: Shipment) -> BaseProvider:
+        from sendparcel.factory import create_provider
+
         provider_class = self.registry.get_by_slug(shipment.provider)
         provider_config = self.config.get(shipment.provider, {})
-        return provider_class(shipment, config=provider_config)
+        return create_provider(shipment, provider_class, provider_config)
 
     async def _apply_update(
         self, shipment: Shipment, update: ShipmentUpdateResult
