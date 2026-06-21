@@ -59,6 +59,114 @@ class BaseProvider(ABC):
         """Read provider setting from config."""
         return self.config.get(name, default)
 
+    def _get_client(self) -> Any:
+        """Return the injected transport, or raise if not configured."""
+        if self._transport is None:
+            raise RuntimeError(
+                f"{self.__class__.__name__} requires a transport. "
+                "Use create_provider() to wire the provider."
+            )
+        return self._transport
+
+    def _validate_config(self) -> None:
+        """Validate configuration against config_schema."""
+        for field_name, spec in self.config_schema.items():
+            if not spec.get("required", False):
+                continue
+            value = self.get_setting(field_name)
+            if value is None or value == "":
+                raise ValueError(
+                    f"{self.__class__.__name__} requires '{field_name}' in config."
+                )
+            expected_type = spec.get("type")
+            if expected_type and value is not None:
+                type_map: dict[str, type | tuple[type, ...]] = {
+                    "str": str,
+                    "int": int,
+                    "float": (int, float),
+                    "bool": bool,
+                    "list[str]": list,
+                }
+                python_type = type_map.get(expected_type)
+                if python_type and not isinstance(value, python_type):
+                    raise TypeError(
+                        f"{self.__class__.__name__} config '{field_name}' "
+                        f"must be {expected_type}, got {type(value).__name__}"
+                    )
+
+    def _address_to_provider(
+        self,
+        addr: AddressInfo,
+        *,
+        field_format: str = "snake",
+    ) -> dict[str, Any]:
+        """Convert AddressInfo to provider-specific address dict.
+        
+        field_format: 'snake' (default), 'camel', 'pascal'
+        Subclasses can override _address_format ClassVar to set their default.
+        """
+        fmt = getattr(self, "_address_format", field_format)
+        
+        def _convert(key: str) -> str:
+            if fmt == "camel":
+                parts = key.split("_")
+                return parts[0] + "".join(p.capitalize() for p in parts[1:])
+            elif fmt == "pascal":
+                return "".join(p.capitalize() for p in key.split("_"))
+            return key  # snake
+        
+        result: dict[str, Any] = {}
+        
+        # Map common fields
+        field_mappings = [
+            ("company", "company"),
+            ("first_name", "first_name"),
+            ("last_name", "last_name"),
+            ("name", "name"),
+            ("street", "street"),
+            ("building_number", "building_number"),
+            ("flat_number", "flat_number"),
+            ("line1", "line1"),
+            ("city", "city"),
+            ("country_code", "country_code"),
+            ("postal_code", "postal_code"),
+            ("phone", "phone"),
+            ("email", "email"),
+        ]
+        
+        for src, dst in field_mappings:
+            value = addr.get(src)
+            if value:
+                result[_convert(dst)] = value
+        
+        return result
+
+    def _parcels_to_provider(
+        self,
+        parcels: list[ParcelInfo],
+    ) -> list[dict[str, Any]]:
+        """Convert ParcelInfo list to provider-specific parcel dicts."""
+        result = []
+        for parcel in parcels:
+            p: dict[str, Any] = {}
+            weight = parcel.get("weight_kg")
+            if weight is not None:
+                p["weight"] = float(weight)
+            
+            length = parcel.get("length_cm")
+            width = parcel.get("width_cm")
+            height = parcel.get("height_cm")
+            if length:
+                p["length"] = float(length)
+            if width:
+                p["width"] = float(width)
+            if height:
+                p["height"] = float(height)
+            
+            result.append(p)
+        
+        return result or [{"weight": 1.0}]
+
     @abstractmethod
     async def create_shipment(
         self,
