@@ -36,8 +36,9 @@ django = ["django-sendparcel>=0.1.0"]
 # litestar = ["litestar-sendparcel>=0.1.0"]
 inpost = ["python-sendparcel-inpost>=0.1.0"]
 dpdpl = ["python-sendparcel-dpdpl>=0.1.0"]
+orlenpaczka = ["python-sendparcel-orlenpaczka>=0.0.1"]
 cli = ["python-sendparcel-cli>=0.1.0"]
-providers = ["python-sendparcel-inpost>=0.1.0", "python-sendparcel-dpdpl>=0.1.0"]
+providers = ["python-sendparcel-inpost>=0.1.0", "python-sendparcel-dpdpl>=0.1.0", "python-sendparcel-orlenpaczka>=0.0.1"]
 frameworks = [
   "django-sendparcel>=0.1.0",
   # "fastapi-sendparcel>=0.1.0",
@@ -49,6 +50,7 @@ all = [
   # "litestar-sendparcel>=0.1.0",
   "python-sendparcel-inpost>=0.1.0",
   "python-sendparcel-dpdpl>=0.1.0",
+  "python-sendparcel-orlenpaczka>=0.0.1",
   "python-sendparcel-cli>=0.1.0",
 ]
 
@@ -101,6 +103,7 @@ invalid-return-type = "ignore"
 django-sendparcel = { path = "../django-sendparcel", editable = true }
 python-sendparcel-inpost = { path = "../python-sendparcel-inpost", editable = true }
 python-sendparcel-dpdpl = { path = "../python-sendparcel-dpdpl", editable = true }
+python-sendparcel-orlenpaczka = { path = "../python-sendparcel-orlenpaczka", editable = true }
 python-sendparcel-cli = { path = "../python-sendparcel-cli", editable = true }
 
 [tool.coverage.run]
