@@ -29,19 +29,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 
-def _format_extra(extra: dict[str, Any] | None) -> dict[str, Any]:
-    """Convert extra fields to a serializable dict."""
-    if not extra:
-        return {}
-    result: dict[str, Any] = {}
-    for k, v in extra.items():
-        if isinstance(v, (str, int, float, bool, type(None))):
-            result[k] = v
-        else:
-            result[k] = str(v)
-    return result
-
-
 class _JsonFormatter(logging.Formatter):
     """JSON formatter for structured logging.
 
@@ -49,7 +36,7 @@ class _JsonFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        extra = _format_extra(getattr(record, "extra", None))
+        extra = getattr(record, "extra", None) or {}
         log_entry: dict[str, Any] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
@@ -67,11 +54,10 @@ class _HumanFormatter(logging.Formatter):
     """Human-readable formatter for development."""
 
     def format(self, record: logging.LogRecord) -> str:
-        extra = _format_extra(getattr(record, "extra", None))
-        extra_str = " ".join(f"{k}={v}" for k, v in extra.items())
-        msg = record.getMessage()
-        if extra_str:
-            msg = f"{msg} {extra_str}"
+        extra = getattr(record, "extra", None) or {}
+        if extra:
+            extra_str = " ".join(f"{k}={v}" for k, v in extra.items())
+            record.msg = f"{record.msg} {extra_str}"
         return super().format(record)
 
 
