@@ -119,38 +119,32 @@ class TestValidateConfig:
         provider._validate_config()
     
     def test_validate_config_missing_required_raises(self) -> None:
-        """_validate_config raises ValueError when required field missing."""
-        provider = EnhancedTestProvider(
-            DemoShipment(),
-            config={"api_key": "test-key"},  # missing required 'timeout'
-        )
-        
+        """Provider construction raises ValueError when required field missing."""
         with pytest.raises(ValueError) as exc_info:
-            provider._validate_config()
+            EnhancedTestProvider(
+                DemoShipment(),
+                config={"api_key": "test-key"},  # missing required 'timeout'
+            )
         
         assert "EnhancedTestProvider requires 'timeout' in config" in str(exc_info.value)
     
     def test_validate_config_empty_string_raises(self) -> None:
-        """_validate_config raises ValueError when required field is empty string."""
-        provider = EnhancedTestProvider(
-            DemoShipment(),
-            config={"api_key": "", "timeout": 30},  # empty api_key
-        )
-        
+        """Provider construction raises ValueError when required field is empty."""
         with pytest.raises(ValueError) as exc_info:
-            provider._validate_config()
+            EnhancedTestProvider(
+                DemoShipment(),
+                config={"api_key": "", "timeout": 30},  # empty api_key
+            )
         
         assert "EnhancedTestProvider requires 'api_key' in config" in str(exc_info.value)
     
     def test_validate_config_wrong_type_raises(self) -> None:
-        """_validate_config raises TypeError when field has wrong type."""
-        provider = EnhancedTestProvider(
-            DemoShipment(),
-            config={"api_key": "test-key", "timeout": "not-an-int"},
-        )
-        
+        """Provider construction raises TypeError when field has wrong type."""
         with pytest.raises(TypeError) as exc_info:
-            provider._validate_config()
+            EnhancedTestProvider(
+                DemoShipment(),
+                config={"api_key": "test-key", "timeout": "not-an-int"},
+            )
         
         assert "EnhancedTestProvider config 'timeout' must be int, got str" in str(exc_info.value)
 

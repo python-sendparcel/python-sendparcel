@@ -54,6 +54,8 @@ class BaseProvider(ABC):
         self.shipment = shipment
         self.config = config or {}
         self._transport = transport
+        if self.config_schema:
+            self._validate_config()
 
     def get_setting(self, name: str, default: Any = None) -> Any:
         """Read provider setting from config."""

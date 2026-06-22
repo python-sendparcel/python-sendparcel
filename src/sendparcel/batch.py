@@ -80,6 +80,17 @@ class BatchCreateResult:
         }
 
 
+def _to_batch_result(res: Any) -> BatchResult:
+    """Convert a ConcurrentResult to a BatchResult."""
+    if res.success:
+        return res.value
+    return BatchResult(
+        index=res.index,
+        success=False,
+        error=res.error,
+    )
+
+
 class ShipmentBatch:
     """Batch shipment operations.
 
@@ -129,20 +140,8 @@ class ShipmentBatch:
         async def _create_one(data: dict[str, Any], index: int) -> BatchResult:
             return await self._create_single_shipment(index, data)
 
-        results = await self._executor.execute(shipments, _create_one)
-        
-        # Convert ConcurrentResult to BatchResult
-        batch_results = []
-        for res in results:
-            if res.success:
-                batch_result = res.value
-            else:
-                batch_result = BatchResult(
-                    index=res.index,
-                    success=False,
-                    error=res.error,
-                )
-            batch_results.append(batch_result)
+        concurrent_results = await self._executor.execute(shipments, _create_one)
+        batch_results = [_to_batch_result(r) for r in concurrent_results]
 
         successful = sum(1 for r in batch_results if r.success)
         failed = sum(1 for r in batch_results if not r.success)
@@ -253,22 +252,8 @@ class ShipmentBatch:
                     error=str(exc),
                 )
 
-        results = await self._executor.execute(shipment_ids, _fetch_one)
-        
-        # Convert ConcurrentResult to BatchResult
-        batch_results = []
-        for res in results:
-            if res.success:
-                batch_result = res.value
-            else:
-                batch_result = BatchResult(
-                    index=res.index,
-                    success=False,
-                    error=res.error,
-                )
-            batch_results.append(batch_result)
-        
-        return batch_results
+        concurrent_results = await self._executor.execute(shipment_ids, _fetch_one)
+        return [_to_batch_result(r) for r in concurrent_results]
 
     async def cancel_shipments(
         self,
@@ -304,19 +289,5 @@ class ShipmentBatch:
                     error=str(exc),
                 )
 
-        results = await self._executor.execute(shipment_ids, _cancel_one)
-        
-        # Convert ConcurrentResult to BatchResult
-        batch_results = []
-        for res in results:
-            if res.success:
-                batch_result = res.value
-            else:
-                batch_result = BatchResult(
-                    index=res.index,
-                    success=False,
-                    error=res.error,
-                )
-            batch_results.append(batch_result)
-        
-        return batch_results
+        concurrent_results = await self._executor.execute(shipment_ids, _cancel_one)
+        return [_to_batch_result(r) for r in concurrent_results]

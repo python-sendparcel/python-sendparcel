@@ -161,14 +161,12 @@ def _register_and_flow(
     provider_cls: type[BaseProvider],
     *,
     config: dict[str, Any] | None = None,
-    validators: list[Any] | None = None,
 ) -> tuple[ShipmentFlow, InMemoryRepository]:
     repository = InMemoryRepository()
     registry.register(provider_cls)
     flow = ShipmentFlow(
         repository=repository,
         config=config,
-        validators=validators,
     )
     return flow, repository
 
@@ -286,17 +284,6 @@ class TestCreateLabel:
 
         assert outcome.shipment.status == "label_ready"
         assert outcome.label.get("url") == "https://labels/123.pdf"
-
-    @pytest.mark.asyncio
-    async def test_validator_failure_is_propagated(self) -> None:
-        def reject_all(data: dict[str, Any]) -> dict[str, Any]:
-            raise ValueError("shipment rejected")
-
-        flow, _ = _register_and_flow(FlowProvider, validators=[reject_all])
-        shipment = await _created_shipment(flow)
-
-        with pytest.raises(ValueError, match="shipment rejected"):
-            await flow.create_label(shipment)
 
     @pytest.mark.asyncio
     async def test_provider_without_label_capability_is_rejected(self) -> None:

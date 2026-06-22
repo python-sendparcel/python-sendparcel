@@ -26,7 +26,6 @@ from sendparcel.types import (
     ShipmentUpdateOutcome,
     ShipmentUpdateResult,
 )
-from sendparcel.validators import run_validators
 
 
 class ShipmentFlow:
@@ -36,12 +35,10 @@ class ShipmentFlow:
         self,
         repository: ShipmentRepository,
         config: dict[str, Any] | None = None,
-        validators: list[Any] | None = None,
         registry: PluginRegistry | None = None,
     ) -> None:
         self.repository = repository
         self.config = config or {}
-        self.validators = validators or []
         self.registry = registry or default_registry
 
     async def create_shipment(
@@ -157,7 +154,6 @@ class ShipmentFlow:
     ) -> CreateLabelOutcome:
         """Create provider label and persist shipment metadata."""
 
-        run_validators({"shipment": shipment}, validators=self.validators)
         provider = self._get_provider(shipment)
         label = await self._call_provider(provider.create_label(**kwargs))
         transition_shipment(shipment, ShipmentStatus.LABEL_READY)
