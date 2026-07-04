@@ -1,6 +1,6 @@
 [project]
 name = "python-sendparcel"
-version = "0.2.0"
+version = "0.3.0"
 description = "Framework-agnostic parcel shipping core for Python."
 readme = "README.md"
 license = { text = "MIT" }
@@ -28,30 +28,31 @@ dev = [
   "pytest-asyncio>=0.24.0",
   "pytest-cov>=5.0",
   "ruff>=0.9.0",
+  "trio>=0.27",
   "ty>=0.0.16",
 ]
 dummy = []
-django = ["django-sendparcel>=0.1.0"]
+django = ["django-sendparcel>=0.3.0"]
 # fastapi = ["fastapi-sendparcel>=0.1.0"]
 # litestar = ["litestar-sendparcel>=0.1.0"]
-inpost = ["python-sendparcel-inpost>=0.1.0"]
-dpdpl = ["python-sendparcel-dpdpl>=0.1.0"]
+inpost = ["python-sendparcel-inpost>=0.3.0"]
+dpdpl = ["python-sendparcel-dpdpl>=0.1.1"]
 orlenpaczka = ["python-sendparcel-orlenpaczka>=0.0.1"]
-cli = ["python-sendparcel-cli>=0.1.0"]
-providers = ["python-sendparcel-inpost>=0.1.0", "python-sendparcel-dpdpl>=0.1.0", "python-sendparcel-orlenpaczka>=0.0.1"]
+cli = ["python-sendparcel-cli>=0.2.0"]
+providers = ["python-sendparcel-inpost>=0.3.0", "python-sendparcel-dpdpl>=0.1.1", "python-sendparcel-orlenpaczka>=0.0.1"]
 frameworks = [
-  "django-sendparcel>=0.1.0",
+  "django-sendparcel>=0.3.0",
   # "fastapi-sendparcel>=0.1.0",
   # "litestar-sendparcel>=0.1.0",
 ]
 all = [
-  "django-sendparcel>=0.1.0",
+  "django-sendparcel>=0.3.0",
   # "fastapi-sendparcel>=0.1.0",
   # "litestar-sendparcel>=0.1.0",
-  "python-sendparcel-inpost>=0.1.0",
-  "python-sendparcel-dpdpl>=0.1.0",
+  "python-sendparcel-inpost>=0.3.0",
+  "python-sendparcel-dpdpl>=0.1.1",
   "python-sendparcel-orlenpaczka>=0.0.1",
-  "python-sendparcel-cli>=0.1.0",
+  "python-sendparcel-cli>=0.2.0",
 ]
 
 [project.urls]

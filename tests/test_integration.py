@@ -56,9 +56,7 @@ class IntegrationProvider(BaseProvider):
     async def create_label(self, **kwargs: Any) -> LabelInfo:
         return LabelInfo(format=LabelFormat.PDF, url="https://labels/int.pdf")
 
-    async def verify_callback(
-        self, ctx: CallbackContext
-    ) -> None:
+    async def verify_callback(self, ctx: CallbackContext) -> None:
         return None
 
     async def handle_callback(

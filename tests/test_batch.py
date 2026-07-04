@@ -155,9 +155,7 @@ class DummyProvider(BaseProvider):
     ) -> ShipmentCreateResult:
         return {"external_id": "ext-1", "tracking_number": "TRK-123"}
 
-    async def verify_callback(
-        self, ctx: CallbackContext
-    ) -> None:
+    async def verify_callback(self, ctx: CallbackContext) -> None:
         pass
 
     async def handle_callback(
@@ -216,6 +214,33 @@ async def test_create_shipments_single_success(
     assert results.results[0].success
     assert results.results[0].shipment is not None
     assert results.results[0].shipment.tracking_number == "TRK-123"
+
+
+async def test_batch_defaults_to_global_registry(
+    repository: MockRepository,
+) -> None:
+    """A batch created without an explicit registry must see providers
+    registered on the global singleton, same as ShipmentFlow."""
+    from sendparcel.batch import ShipmentBatch
+    from sendparcel.registry import registry as global_registry
+
+    global_registry.register(DummyProvider)
+
+    batch = ShipmentBatch(repository=repository)
+
+    results = await batch.create_shipments(
+        [
+            {
+                "provider_slug": "test-dummy",
+                "sender_address": {"name": "Sender", "country_code": "PL"},
+                "receiver_address": {"name": "Receiver", "country_code": "PL"},
+                "parcels": [{"weight": 1.0}],
+            }
+        ]
+    )
+
+    assert results.successful == 1
+    assert results.failed == 0
 
 
 async def test_create_shipments_multiple_success(

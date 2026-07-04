@@ -17,19 +17,35 @@ mycarrier = "sendparcel_mycarrier.provider:MyCarrierProvider"
 ## Provider contract
 
 Every provider must subclass `sendparcel.provider.BaseProvider`.
+There are no capability trait classes — `BaseProvider` declares every
+capability method, and the unsupported ones raise
+`ProviderCapabilityError` by default. Override only what the carrier
+actually supports.
 
 ### Required
 
 - `create_shipment(sender_address, receiver_address, parcels, **kwargs) -> ShipmentCreateResult`
 
-### Optional traits
+### Optional capability overrides
 
-| Capability | Trait | Return value |
+| Capability | Method to override | Return value |
 |---|---|---|
-| Labels | `LabelProvider` | `LabelInfo` |
-| Webhooks | `PushCallbackProvider` | `ShipmentUpdateResult` |
-| Polling | `PullStatusProvider` | `ShipmentUpdateResult` |
-| Cancellation | `CancellableProvider` | `bool` |
+| Labels | `create_label(**kwargs)` | `LabelInfo` |
+| Webhooks | `verify_callback(ctx)` + `handle_callback(ctx)` | `None` / `ShipmentUpdateResult` |
+| Polling | `fetch_shipment_status(**kwargs)` | `ShipmentUpdateResult` |
+| Cancellation | `cancel_shipment(**kwargs)` | `bool` |
+
+Webhook methods receive a `sendparcel.types.CallbackContext` carrying
+`shipment_id`, `payload`, `headers`, `source_ip`, and `raw_body`.
+
+### Transport
+
+Providers that talk HTTP declare a `transport_factory` classvar
+(`transport_factory(**config) -> transport`). The factory is called by
+`sendparcel.factory.create_provider`, and the built transport is
+available inside the provider via `self._get_client()`. Configuration
+fields are declared in `config_schema`; required fields are validated
+automatically at construction time.
 
 ## Important rule
 
@@ -48,18 +64,20 @@ That means callback and polling implementations should translate carrier payload
 `BaseProvider.confirmation_method` defaults to `ConfirmationMethod.NONE`.
 
 - `NONE` - the provider does not expose shipment updates.
-- `PUSH` - the provider must implement `PushCallbackProvider`.
-- `PULL` - the provider must implement `PullStatusProvider`.
+- `PUSH` - the provider must override `verify_callback` and
+  `handle_callback`.
+- `PULL` - the provider must override `fetch_shipment_status`.
 
-Do not declare `PUSH` or `PULL` unless the provider actually implements the
-matching capability trait.
+Do not declare `PUSH` or `PULL` unless the provider actually overrides the
+matching capability methods.
 
 ## Minimal example
 
 ```python
 from typing import Any, ClassVar
 
-from sendparcel.provider import BaseProvider, LabelProvider
+from sendparcel.enums import LabelFormat
+from sendparcel.provider import BaseProvider
 from sendparcel.types import (
     AddressInfo,
     LabelInfo,
@@ -68,7 +86,7 @@ from sendparcel.types import (
 )
 
 
-class MyCarrierProvider(BaseProvider, LabelProvider):
+class MyCarrierProvider(BaseProvider):
     slug: ClassVar[str] = "mycarrier"
     display_name: ClassVar[str] = "My Carrier"
 
@@ -87,7 +105,7 @@ class MyCarrierProvider(BaseProvider, LabelProvider):
 
     async def create_label(self, **kwargs: Any) -> LabelInfo:
         return LabelInfo(
-            format="PDF",
+            format=LabelFormat.PDF,
             url="https://carrier.example/labels/TRACK-123.pdf",
         )
 ```
@@ -95,16 +113,18 @@ class MyCarrierProvider(BaseProvider, LabelProvider):
 ## Callback and polling example
 
 ```python
-from sendparcel.provider import PullStatusProvider, PushCallbackProvider
-from sendparcel.types import ShipmentUpdateResult
+from sendparcel.enums import ConfirmationMethod
+from sendparcel.types import CallbackContext, ShipmentUpdateResult
 
 
-class StatusProvider(BaseProvider, PushCallbackProvider, PullStatusProvider):
-    async def verify_callback(self, data, headers, **kwargs) -> None:
+class StatusProvider(MyCarrierProvider):
+    confirmation_method = ConfirmationMethod.PUSH
+
+    async def verify_callback(self, ctx: CallbackContext) -> None:
         return None
 
     async def handle_callback(
-        self, data, headers, **kwargs
+        self, ctx: CallbackContext
     ) -> ShipmentUpdateResult:
         return ShipmentUpdateResult(status="in_transit")
 

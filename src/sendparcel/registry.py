@@ -62,6 +62,15 @@ class PluginRegistry:
             except KeyError as exc:
                 raise ProviderNotFoundError(slug) from exc
 
+    def slugs(self) -> list[str]:
+        """Get all registered provider slugs.
+
+        Thread-safe.
+        """
+        self._ensure_discovered()
+        with self._lock:
+            return list(self._providers)
+
     def get_choices(self) -> list[tuple[str, str]]:
         """Get provider slug/display pairs for user-facing selection.
 

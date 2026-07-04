@@ -2,7 +2,7 @@
 
 Framework-agnostic parcel shipping core for Python.
 
-> Alpha notice: `0.1.1` is still unstable. The API can change fast because the
+> Alpha notice: `0.3.0` is still unstable. The API can change fast because the
 > ecosystem is still being cleaned up.
 
 ## What it is
@@ -67,6 +67,12 @@ class InMemoryRepository:
         self._store[shipment.id] = shipment
         return shipment
 
+    async def update_fields(self, shipment_id: str, **fields) -> MyShipment:
+        shipment = self._store[shipment_id]
+        for key, value in fields.items():
+            setattr(shipment, key, value)
+        return shipment
+
 
 async def main() -> None:
     flow = ShipmentFlow(repository=InMemoryRepository())
@@ -103,15 +109,20 @@ anyio.run(main)
 
 ## Provider model
 
-- `BaseProvider.create_shipment(...)` returns `ShipmentCreateResult`.
-- `BaseProvider.confirmation_method` defaults to `ConfirmationMethod.NONE`.
-- `LabelProvider.create_label(...)` returns `LabelInfo`.
-- `PushCallbackProvider.handle_callback(...)` returns `ShipmentUpdateResult`.
-- `PullStatusProvider.fetch_shipment_status(...)` returns `ShipmentUpdateResult`.
-- `CancellableProvider.cancel_shipment(...)` returns `bool`.
+All providers subclass `BaseProvider`; capability methods raise
+`ProviderCapabilityError` unless overridden:
 
-Use `ConfirmationMethod.PUSH` only with `PushCallbackProvider` and
-`ConfirmationMethod.PULL` only with `PullStatusProvider`.
+- `BaseProvider.create_shipment(...)` returns `ShipmentCreateResult` (required).
+- `BaseProvider.confirmation_method` defaults to `ConfirmationMethod.NONE`.
+- `BaseProvider.create_label(...)` returns `LabelInfo`.
+- `BaseProvider.verify_callback(ctx)` / `handle_callback(ctx)` return
+  `None` / `ShipmentUpdateResult`.
+- `BaseProvider.fetch_shipment_status(...)` returns `ShipmentUpdateResult`.
+- `BaseProvider.cancel_shipment(...)` returns `bool`.
+
+Use `ConfirmationMethod.PUSH` only when the callback methods are overridden
+and `ConfirmationMethod.PULL` only when `fetch_shipment_status` is. See
+`docs/provider-authoring.md` for the full guide.
 
 The core owns shipment state transitions. Providers translate carrier responses
 into normalized results.
@@ -131,10 +142,9 @@ uv add python-sendparcel
 ## Extras
 
 - `django`
-- `fastapi`
-- `litestar`
 - `inpost`
 - `dpdpl`
+- `orlenpaczka`
 - `cli`
 - `frameworks`
 - `providers`
@@ -145,6 +155,8 @@ uv add python-sendparcel
 ```bash
 uv sync --extra dev
 uv run pytest
-uv run ruff check src tests
-uv run mypy src tests
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run mypy src
 ```

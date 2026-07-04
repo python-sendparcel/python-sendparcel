@@ -61,7 +61,9 @@ class DummyProvider(BaseProvider):
         if provided != expected:
             raise InvalidCallbackError("BAD TOKEN")
 
-    async def handle_callback(self, ctx: CallbackContext) -> ShipmentUpdateResult:
+    async def handle_callback(
+        self, ctx: CallbackContext
+    ) -> ShipmentUpdateResult:
         await self._simulate_latency()
         status_value = ctx.payload.get("status")
         if not status_value:

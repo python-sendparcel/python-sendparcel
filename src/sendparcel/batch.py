@@ -31,11 +31,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from sendparcel.concurrent import ConcurrentExecutor
+from sendparcel.concurrent import ConcurrentExecutor, ConcurrentResult
 from sendparcel.flow import ShipmentFlow
 from sendparcel.logging import get_logger
 from sendparcel.protocols import ShipmentRepository
 from sendparcel.registry import PluginRegistry
+from sendparcel.registry import registry as default_registry
 
 logger = get_logger(__name__)
 
@@ -80,10 +81,11 @@ class BatchCreateResult:
         }
 
 
-def _to_batch_result(res: Any) -> BatchResult:
+def _to_batch_result(res: ConcurrentResult) -> BatchResult:
     """Convert a ConcurrentResult to a BatchResult."""
     if res.success:
-        return res.value
+        result: BatchResult = res.value
+        return result
     return BatchResult(
         index=res.index,
         success=False,
@@ -95,8 +97,9 @@ class ShipmentBatch:
     """Batch shipment operations.
 
     Provides efficient batch creation, status fetching, and cancellation
-    of shipments. All operations are atomic within the batch — if one
-    shipment fails, the others are still processed.
+    of shipments. Operations are independent — if one shipment fails,
+    the others are still processed. There is no cross-shipment
+    transaction or rollback.
 
     Args:
         repository: Shipment repository for persisting results.
@@ -115,7 +118,7 @@ class ShipmentBatch:
     ) -> None:
         self.repository = repository
         self.config = config or {}
-        self.registry = registry or PluginRegistry()
+        self.registry = registry or default_registry
         self._executor = ConcurrentExecutor(max_concurrent)
 
     async def create_shipments(
@@ -137,10 +140,13 @@ class ShipmentBatch:
         Returns:
             BatchCreateResult with per-shipment results.
         """
+
         async def _create_one(data: dict[str, Any], index: int) -> BatchResult:
             return await self._create_single_shipment(index, data)
 
-        concurrent_results = await self._executor.execute(shipments, _create_one)
+        concurrent_results = await self._executor.execute(
+            shipments, _create_one
+        )
         batch_results = [_to_batch_result(r) for r in concurrent_results]
 
         successful = sum(1 for r in batch_results if r.success)
@@ -230,6 +236,7 @@ class ShipmentBatch:
         Returns:
             List of BatchResult with per-shipment status updates.
         """
+
         async def _fetch_one(sid: str, index: int) -> BatchResult:
             try:
                 shipment = await self.repository.get_by_id(sid)
@@ -252,7 +259,9 @@ class ShipmentBatch:
                     error=str(exc),
                 )
 
-        concurrent_results = await self._executor.execute(shipment_ids, _fetch_one)
+        concurrent_results = await self._executor.execute(
+            shipment_ids, _fetch_one
+        )
         return [_to_batch_result(r) for r in concurrent_results]
 
     async def cancel_shipments(
@@ -267,6 +276,7 @@ class ShipmentBatch:
         Returns:
             List of BatchResult with per-shipment cancellation results.
         """
+
         async def _cancel_one(sid: str, index: int) -> BatchResult:
             try:
                 shipment = await self.repository.get_by_id(sid)
@@ -289,5 +299,7 @@ class ShipmentBatch:
                     error=str(exc),
                 )
 
-        concurrent_results = await self._executor.execute(shipment_ids, _cancel_one)
+        concurrent_results = await self._executor.execute(
+            shipment_ids, _cancel_one
+        )
         return [_to_batch_result(r) for r in concurrent_results]

@@ -1,11 +1,13 @@
 """Type tests."""
 
 from decimal import Decimal
+from typing import get_type_hints
 
 from conftest import DemoShipment
 from sendparcel.enums import LabelFormat
 from sendparcel.types import (
     AddressInfo,
+    CallbackContext,
     CreateLabelOutcome,
     CreateShipmentOutcome,
     LabelInfo,
@@ -14,6 +16,14 @@ from sendparcel.types import (
     ShipmentUpdateOutcome,
     ShipmentUpdateResult,
 )
+
+
+def test_callback_context_type_hints_are_resolvable() -> None:
+    """Frameworks introspect CallbackContext (pydantic, DRF, schema
+    generators); every annotation must resolve at runtime."""
+    hints = get_type_hints(CallbackContext)
+    assert "payload" in hints
+    assert "shipment_id" in hints
 
 
 def test_core_types_shape_examples() -> None:

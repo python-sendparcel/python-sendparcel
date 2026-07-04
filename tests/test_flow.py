@@ -63,9 +63,7 @@ class FlowProvider(BaseProvider):
     async def create_label(self, **kwargs: Any) -> LabelInfo:
         return LabelInfo(format=LabelFormat.PDF, url="https://labels/123.pdf")
 
-    async def verify_callback(
-        self, ctx: CallbackContext
-    ) -> None:
+    async def verify_callback(self, ctx: CallbackContext) -> None:
         if ctx.headers.get("x-flow-token") == "bad":
             raise InvalidCallbackError("bad signature")
 

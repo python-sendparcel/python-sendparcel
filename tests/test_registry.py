@@ -71,6 +71,17 @@ def test_register_get_unregister_cycle() -> None:
         reg.get_by_slug("a")
 
 
+def test_slugs_lists_registered_providers() -> None:
+    """Public accessor for all registered slugs — adapters (e.g. the
+    Django health check) need this without touching private state."""
+    reg = PluginRegistry()
+    reg.register(ProviderA)
+
+    slugs = reg.slugs()
+    assert "a" in slugs
+    assert "dummy" in slugs  # builtin, discovered lazily
+
+
 def test_register_duplicate_slug_raises() -> None:
     reg = PluginRegistry()
     reg.register(ProviderA)

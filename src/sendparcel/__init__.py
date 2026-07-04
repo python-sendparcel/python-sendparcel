@@ -1,6 +1,6 @@
 """sendparcel core package."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from sendparcel.batch import BatchCreateResult, BatchResult, ShipmentBatch
 from sendparcel.enums import ConfirmationMethod, LabelFormat, ShipmentStatus
@@ -38,7 +38,6 @@ __all__ = [
     "CreateShipmentOutcome",
     "DummyProvider",
     "InvalidCallbackError",
-    "create_provider",
     "InvalidTransitionError",
     "LabelFormat",
     "ProviderCapabilityError",
@@ -52,6 +51,7 @@ __all__ = [
     "ShipmentUpdateResult",
     "__version__",
     "configure_logging",
+    "create_provider",
     "get_logger",
     "registry",
 ]

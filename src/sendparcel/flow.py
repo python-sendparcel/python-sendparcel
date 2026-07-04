@@ -9,7 +9,6 @@ import httpx
 from sendparcel.enums import ShipmentStatus
 from sendparcel.exceptions import (
     CommunicationError,
-    ProviderCapabilityError,
     SendParcelException,
 )
 from sendparcel.fsm import transition_shipment

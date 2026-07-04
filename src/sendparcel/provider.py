@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.exceptions import ProviderCapabilityError
@@ -78,7 +79,8 @@ class BaseProvider(ABC):
             value = self.get_setting(field_name)
             if value is None or value == "":
                 raise ValueError(
-                    f"{self.__class__.__name__} requires '{field_name}' in config."
+                    f"{self.__class__.__name__} requires "
+                    f"'{field_name}' in config."
                 )
             expected_type = spec.get("type")
             if expected_type and value is not None:
@@ -103,12 +105,12 @@ class BaseProvider(ABC):
         field_format: str = "snake",
     ) -> dict[str, Any]:
         """Convert AddressInfo to provider-specific address dict.
-        
+
         field_format: 'snake' (default), 'camel', 'pascal'
         Subclasses can override _address_format ClassVar to set their default.
         """
         fmt = getattr(self, "_address_format", field_format)
-        
+
         def _convert(key: str) -> str:
             if fmt == "camel":
                 parts = key.split("_")
@@ -116,9 +118,9 @@ class BaseProvider(ABC):
             elif fmt == "pascal":
                 return "".join(p.capitalize() for p in key.split("_"))
             return key  # snake
-        
+
         result: dict[str, Any] = {}
-        
+
         # Map common fields
         field_mappings = [
             ("company", "company"),
@@ -135,12 +137,12 @@ class BaseProvider(ABC):
             ("phone", "phone"),
             ("email", "email"),
         ]
-        
+
         for src, dst in field_mappings:
             value = addr.get(src)
             if value:
                 result[_convert(dst)] = value
-        
+
         return result
 
     def _parcels_to_provider(
@@ -154,7 +156,7 @@ class BaseProvider(ABC):
             weight = parcel.get("weight_kg")
             if weight is not None:
                 p["weight"] = float(weight)
-            
+
             length = parcel.get("length_cm")
             width = parcel.get("width_cm")
             height = parcel.get("height_cm")
@@ -164,9 +166,9 @@ class BaseProvider(ABC):
                 p["width"] = float(width)
             if height:
                 p["height"] = float(height)
-            
+
             result.append(p)
-        
+
         return result or [{"weight": 1.0}]
 
     @abstractmethod
@@ -202,7 +204,9 @@ class BaseProvider(ABC):
             "push callbacks"
         )
 
-    async def handle_callback(self, ctx: CallbackContext) -> ShipmentUpdateResult:
+    async def handle_callback(
+        self, ctx: CallbackContext
+    ) -> ShipmentUpdateResult:
         """Normalize callback data into a shipment update payload.
 
         Raises :exc:`ProviderCapabilityError` if the provider does not
@@ -213,7 +217,9 @@ class BaseProvider(ABC):
             "push callbacks"
         )
 
-    async def fetch_shipment_status(self, **kwargs: Any) -> ShipmentUpdateResult:
+    async def fetch_shipment_status(
+        self, **kwargs: Any
+    ) -> ShipmentUpdateResult:
         """Fetch latest shipment update from provider.
 
         Raises :exc:`ProviderCapabilityError` if the provider does not

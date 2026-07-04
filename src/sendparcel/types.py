@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from sendparcel.enums import LabelFormat
 from sendparcel.protocols import Shipment
@@ -129,7 +129,7 @@ class CallbackContext:
     @property
     def dedup_hash(self) -> str:
         """Deterministic SHA-256 hash of the payload for dedup checks."""
-        raw = json.dumps(
-            self.payload, sort_keys=True, default=str
-        ).encode("utf-8")
+        raw = json.dumps(self.payload, sort_keys=True, default=str).encode(
+            "utf-8"
+        )
         return hashlib.sha256(raw).hexdigest()
