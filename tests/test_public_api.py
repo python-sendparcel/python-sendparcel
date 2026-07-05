@@ -18,6 +18,7 @@ def test_public_api_exports_exact_set() -> None:
         "CreateShipmentOutcome",
         "GeoPoint",
         "PickupPoint",
+        "Quote",
         "DummyProvider",
         "configure_logging",
         "create_provider",

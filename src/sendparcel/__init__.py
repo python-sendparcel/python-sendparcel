@@ -27,6 +27,7 @@ from sendparcel.types import (
     CreateShipmentOutcome,
     GeoPoint,
     PickupPoint,
+    Quote,
     ShipmentUpdateOutcome,
     ShipmentUpdateResult,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "PickupPoint",
     "ProviderCapabilityError",
     "ProviderNotFoundError",
+    "Quote",
     "SendParcelException",
     "ShipmentBatch",
     "ShipmentFlow",

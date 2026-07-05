@@ -16,6 +16,7 @@ from sendparcel.types import (
     LabelInfo,
     ParcelInfo,
     PickupPoint,
+    Quote,
     ShipmentCreateResult,
     ShipmentUpdateResult,
 )
@@ -279,4 +280,33 @@ class BaseProvider(ABC):
         raise ProviderCapabilityError(
             f"Provider {self.__class__.__name__!r} does not support "
             "pickup point search"
+        )
+
+    async def get_quote(
+        self,
+        *,
+        service: str,
+        parcels: list[ParcelInfo],
+        sender_address: AddressInfo | None = None,
+        receiver_address: AddressInfo | None = None,
+        **kwargs: Any,
+    ) -> Quote:
+        """Get a shipping rate quote for a service/route combination.
+
+        Args:
+            service: Service slug (e.g. "parcel_locker_31_0").
+            parcels: List of parcel definitions.
+            sender_address: Optional sender address.
+            receiver_address: Optional receiver address.
+
+        Returns:
+            :class:`Quote` with carrier cost as ``Decimal``.
+
+        Raises:
+            ProviderCapabilityError: If the provider does not support
+                rate lookup (callers should fall back to static pricing).
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "rate lookup"
         )

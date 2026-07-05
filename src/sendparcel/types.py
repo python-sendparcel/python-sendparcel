@@ -165,6 +165,24 @@ class PickupPoint(_PickupPointRequired, total=False):
     raw: dict[str, Any] | None
 
 
+class _QuoteRequired(TypedDict):
+    provider_slug: str
+    service: str
+    amount: Decimal
+    currency: str
+
+
+class Quote(_QuoteRequired, total=False):
+    """Shipping rate quote from a carrier.
+
+    ``amount`` is the carrier cost in the provider's currency.
+    Use ``Decimal`` — never ``float`` — for monetary values.
+    """
+
+    valid_until: str | None
+    raw: dict[str, Any] | None
+
+
 @dataclass(slots=True)
 class CallbackContext:
     """Everything needed to process a webhook callback.
