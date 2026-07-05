@@ -19,6 +19,7 @@ from sendparcel.registry import registry as default_registry
 from sendparcel.types import (
     AddressInfo,
     CallbackContext,
+    CancelOutcome,
     CreateLabelOutcome,
     CreateShipmentOutcome,
     ParcelInfo,
@@ -193,19 +194,30 @@ class ShipmentFlow:
         saved = await self._apply_update(shipment, normalized_update)
         return ShipmentUpdateOutcome(shipment=saved, update=normalized_update)
 
-    async def cancel_shipment(self, shipment: Shipment, **kwargs: Any) -> bool:
-        """Cancel shipment via provider and persist state."""
+    async def cancel_shipment(
+        self, shipment: Shipment, **kwargs: Any
+    ) -> CancelOutcome:
+        """Cancel shipment via provider and persist state.
 
+        Returns a structured :class:`CancelOutcome` so callers can
+        distinguish permanent denies from retryable failures.
+
+        - ``CANCELLED`` / ``ALREADY_CANCELLED`` → transitions shipment to
+          ``CANCELLED``.
+        - ``REFUSED_IN_TRANSIT`` / ``NOT_CANCELLABLE`` → leaves shipment
+          in current state (caller decides UX).
+        - ``TRANSIENT_ERROR`` → raises ``CommunicationError`` (retryable),
+          no state change.
+        - ``AUTH_ERROR`` → re-raises provider auth error.
+        """
         provider = self._get_provider(shipment)
-        cancelled = await self._call_provider(
-            provider.cancel_shipment(**kwargs)
-        )
-        if cancelled:
+        outcome = await self._call_provider(provider.cancel_shipment(**kwargs))
+        if outcome.get("cancelled"):
             transition_shipment(shipment, ShipmentStatus.CANCELLED)
             await self.repository.update_fields(
                 shipment_id=shipment.id, status=shipment.status
             )
-        return bool(cancelled)
+        return outcome
 
     def _get_provider(self, shipment: Shipment) -> BaseProvider:
         from sendparcel.factory import create_provider

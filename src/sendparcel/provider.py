@@ -12,6 +12,7 @@ from sendparcel.protocols import Shipment
 from sendparcel.types import (
     AddressInfo,
     CallbackContext,
+    CancelOutcome,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -230,8 +231,14 @@ class BaseProvider(ABC):
             "status polling"
         )
 
-    async def cancel_shipment(self, **kwargs: Any) -> bool:
+    async def cancel_shipment(
+        self, **kwargs: Any
+    ) -> CancelOutcome:
         """Cancel shipment if provider supports cancellation.
+
+        Returns a structured :class:`CancelOutcome` so callers can
+        distinguish permanent denies (REFUSED_IN_TRANSIT, NOT_CANCELLABLE)
+        from retryable failures (TRANSIENT_ERROR).
 
         Raises :exc:`ProviderCapabilityError` if the provider does not
         support cancellation.

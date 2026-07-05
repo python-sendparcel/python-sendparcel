@@ -15,6 +15,8 @@ from sendparcel.registry import PluginRegistry
 from sendparcel.types import (
     AddressInfo,
     CallbackContext,
+    CancelOutcome,
+    CancelReason,
     ParcelInfo,
     ShipmentCreateResult,
     ShipmentUpdateResult,
@@ -168,8 +170,14 @@ class DummyProvider(BaseProvider):
     ) -> ShipmentUpdateResult:
         return {"status": ShipmentStatus.CREATED}
 
-    async def cancel_shipment(self, **kwargs: Any) -> bool:
-        return True
+    async def cancel_shipment(self, **kwargs: Any) -> CancelOutcome:
+        return CancelOutcome(
+            cancelled=True,
+            reason=CancelReason.CANCELLED,
+            retryable=False,
+            provider_status_code=200,
+            detail=None,
+        )
 
 
 @pytest.fixture

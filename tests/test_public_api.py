@@ -9,6 +9,8 @@ def test_public_api_exports_exact_set() -> None:
         "BaseProvider",
         "BatchCreateResult",
         "BatchResult",
+        "CancelOutcome",
+        "CancelReason",
         "CallbackContext",
         "CommunicationError",
         "ConfirmationMethod",

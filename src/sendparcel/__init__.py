@@ -21,6 +21,8 @@ from sendparcel.providers.dummy import DummyProvider
 from sendparcel.registry import registry
 from sendparcel.types import (
     CallbackContext,
+    CancelOutcome,
+    CancelReason,
     CreateLabelOutcome,
     CreateShipmentOutcome,
     ShipmentUpdateOutcome,
@@ -32,6 +34,8 @@ __all__ = [
     "BatchCreateResult",
     "BatchResult",
     "CallbackContext",
+    "CancelOutcome",
+    "CancelReason",
     "CommunicationError",
     "ConfirmationMethod",
     "CreateLabelOutcome",

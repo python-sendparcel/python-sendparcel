@@ -20,6 +20,8 @@ from sendparcel.registry import registry
 from sendparcel.types import (
     AddressInfo,
     CallbackContext,
+    CancelOutcome,
+    CancelReason,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -84,8 +86,19 @@ class FlowProvider(BaseProvider):
             tracking_events=[{"code": "polled"}],
         )
 
-    async def cancel_shipment(self, **kwargs: Any) -> bool:
-        return bool(self.get_setting("cancel_success", True))
+    async def cancel_shipment(self, **kwargs: Any) -> CancelOutcome:
+        success = bool(self.get_setting("cancel_success", True))
+        return CancelOutcome(
+            cancelled=success,
+            reason=(
+                CancelReason.CANCELLED
+                if success
+                else CancelReason.REFUSED_IN_TRANSIT
+            ),
+            retryable=False,
+            provider_status_code=200 if success else 400,
+            detail=None,
+        )
 
 
 class LabelIncludedProvider(BaseProvider):
@@ -377,7 +390,7 @@ class TestCancelShipment:
 
         cancelled = await flow.cancel_shipment(shipment)
 
-        assert cancelled is True
+        assert cancelled["cancelled"] is True
         assert shipment.status == "cancelled"
 
     @pytest.mark.asyncio
@@ -392,7 +405,7 @@ class TestCancelShipment:
 
         cancelled = await flow.cancel_shipment(shipment)
 
-        assert cancelled is False
+        assert cancelled["cancelled"] is False
         assert shipment.status == "created"
 
     @pytest.mark.asyncio

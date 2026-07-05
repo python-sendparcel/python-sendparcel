@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any, TypedDict
 
 from sendparcel.enums import LabelFormat
@@ -105,6 +106,35 @@ class ShipmentUpdateOutcome:
 
     shipment: Shipment
     update: ShipmentUpdateResult
+
+
+class CancelReason(StrEnum):
+    """Reason for a cancel_shipment outcome."""
+
+    CANCELLED = "cancelled"
+    ALREADY_CANCELLED = "already_cancelled"
+    REFUSED_IN_TRANSIT = "refused_in_transit"
+    NOT_CANCELLABLE = "not_cancellable"
+    TRANSIENT_ERROR = "transient_error"
+    AUTH_ERROR = "auth_error"
+
+
+class _CancelOutcomeRequired(TypedDict):
+    cancelled: bool
+    reason: CancelReason
+    retryable: bool
+
+
+class CancelOutcome(_CancelOutcomeRequired, total=False):
+    """Structured result from cancel_shipment.
+
+    Replaces the bare bool return so callers can distinguish permanent
+    denies (REFUSED_IN_TRANSIT, NOT_CANCELLABLE) from retryable failures
+    (TRANSIENT_ERROR).
+    """
+
+    provider_status_code: int | None
+    detail: str | None
 
 
 @dataclass(slots=True)
