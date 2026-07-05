@@ -23,6 +23,7 @@ from sendparcel.types import (
     CreateLabelOutcome,
     CreateShipmentOutcome,
     ParcelInfo,
+    PickupPoint,
     ShipmentUpdateOutcome,
     ShipmentUpdateResult,
 )
@@ -218,6 +219,65 @@ class ShipmentFlow:
                 shipment_id=shipment.id, status=shipment.status
             )
         return outcome
+
+    async def search_points(
+        self,
+        provider_slug: str,
+        *,
+        query: str | None = None,
+        near: tuple[float, float] | None = None,
+        radius_m: int | None = None,
+        point_type: str | None = None,
+        limit: int = 20,
+        **kwargs: Any,
+    ) -> list[PickupPoint]:
+        """Search carrier pickup points via the registered provider.
+
+        Convenience method that delegates to the provider's
+        ``search_points`` capability. Raises
+        ``ProviderCapabilityError`` if the provider does not support
+        point search.
+
+        Args:
+            provider_slug: Provider identifier.
+            query: Free-text search (city, address, or point code).
+            near: (lat, lng) tuple for proximity search.
+            radius_m: Search radius in metres when ``near`` is given.
+            point_type: Provider taxonomy filter.
+            limit: Maximum number of results.
+
+        Returns:
+            List of :class:`PickupPoint` results.
+        """
+        self.registry.get_by_slug(provider_slug)
+        provider_class = self.registry.get_by_slug(provider_slug)
+        provider_config = self.config.get(provider_slug, {})
+        from sendparcel.factory import create_provider
+
+        # Use a dummy shipment for provider instantiation — search_points
+        # does not operate on a specific shipment.
+        from sendparcel.providers.dummy import DummyProvider
+
+        dummy = DummyProvider.__new__(DummyProvider)
+        dummy.id = ""
+        dummy.status = "new"
+        dummy.provider = provider_slug
+        dummy.external_id = ""
+        dummy.tracking_number = ""
+
+        provider = create_provider(
+            dummy, provider_class, provider_config  # type: ignore[arg-type]
+        )
+        return await self._call_provider(
+            provider.search_points(
+                query=query,
+                near=near,
+                radius_m=radius_m,
+                point_type=point_type,
+                limit=limit,
+                **kwargs,
+            )
+        )
 
     def _get_provider(self, shipment: Shipment) -> BaseProvider:
         from sendparcel.factory import create_provider

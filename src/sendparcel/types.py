@@ -137,6 +137,34 @@ class CancelOutcome(_CancelOutcomeRequired, total=False):
     detail: str | None
 
 
+class GeoPoint(TypedDict):
+    """Geographic coordinate pair."""
+
+    lat: float
+    lng: float
+
+
+class _PickupPointRequired(TypedDict):
+    code: str
+    name: str
+    provider_slug: str
+    address: str
+
+
+class PickupPoint(_PickupPointRequired, total=False):
+    """Carrier pickup point (locker, parcel shop, etc.).
+
+    ``code`` is the machine id used as ``target_point`` in
+    ``create_shipment``, so a searched point is directly usable
+    without translation.
+    """
+
+    location: GeoPoint | None
+    opening_hours: str | None
+    point_type: str | None
+    raw: dict[str, Any] | None
+
+
 @dataclass(slots=True)
 class CallbackContext:
     """Everything needed to process a webhook callback.

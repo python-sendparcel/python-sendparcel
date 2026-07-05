@@ -15,6 +15,7 @@ from sendparcel.types import (
     CancelOutcome,
     LabelInfo,
     ParcelInfo,
+    PickupPoint,
     ShipmentCreateResult,
     ShipmentUpdateResult,
 )
@@ -246,4 +247,36 @@ class BaseProvider(ABC):
         raise ProviderCapabilityError(
             f"Provider {self.__class__.__name__!r} does not support "
             "cancellation"
+        )
+
+    async def search_points(
+        self,
+        *,
+        query: str | None = None,
+        near: tuple[float, float] | None = None,
+        radius_m: int | None = None,
+        point_type: str | None = None,
+        limit: int = 20,
+        **kwargs: Any,
+    ) -> list[PickupPoint]:
+        """Search carrier pickup points (lockers, parcel shops, etc.).
+
+        Args:
+            query: Free-text search (city, address, or point code).
+            near: (lat, lng) tuple for proximity search.
+            radius_m: Search radius in metres when ``near`` is given.
+            point_type: Provider taxonomy filter (e.g. "parcel_locker").
+            limit: Maximum number of results to return.
+
+        Returns:
+            List of :class:`PickupPoint` results, ordered by distance
+            when ``near`` is given, else by relevance/name.
+
+        Raises:
+            ProviderCapabilityError: If the provider does not support
+                point search.
+        """
+        raise ProviderCapabilityError(
+            f"Provider {self.__class__.__name__!r} does not support "
+            "pickup point search"
         )
