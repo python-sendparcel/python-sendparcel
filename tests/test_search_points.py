@@ -11,6 +11,7 @@ from sendparcel.flow import ShipmentFlow
 from sendparcel.provider import BaseProvider
 from sendparcel.types import (
     AddressInfo,
+    GeoPoint,
     ParcelInfo,
     PickupPoint,
     ShipmentCreateResult,
@@ -38,7 +39,7 @@ class SearchPointsProvider(BaseProvider):
         self,
         *,
         query: str | None = None,
-        near: tuple[float, float] | None = None,
+        near: GeoPoint | None = None,
         radius_m: int | None = None,
         point_type: str | None = None,
         limit: int = 20,
@@ -165,7 +166,7 @@ class TestSearchPointsFlow:
         await flow.search_points(
             "search_test",
             query="Warsaw",
-            near=(52.23, 21.01),
+            near={"lat": 52.23, "lng": 21.01},
             radius_m=5000,
             point_type="parcel_locker",
             limit=10,
@@ -208,7 +209,7 @@ class TestSearchPointsFlow:
 
         points = await flow.search_points(
             "search_test",
-            near=(52.23, 21.01),
+            near={"lat": 52.23, "lng": 21.01},
             radius_m=5000,
         )
 

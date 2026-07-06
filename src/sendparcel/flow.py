@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -20,13 +21,27 @@ from sendparcel.types import (
     AddressInfo,
     CallbackContext,
     CancelOutcome,
+    CancelReason,
     CreateLabelOutcome,
     CreateShipmentOutcome,
+    GeoPoint,
     ParcelInfo,
     PickupPoint,
     ShipmentUpdateOutcome,
     ShipmentUpdateResult,
 )
+
+
+@dataclass(slots=True)
+class _PointSearchShipment:
+    """Placeholder satisfying the Shipment protocol for provider calls
+    that do not operate on a specific shipment (e.g. point search)."""
+
+    provider: str
+    id: str = ""
+    status: str = "new"
+    external_id: str = ""
+    tracking_number: str = ""
 
 
 class ShipmentFlow:
@@ -213,6 +228,14 @@ class ShipmentFlow:
         """
         provider = self._get_provider(shipment)
         outcome = await self._call_provider(provider.cancel_shipment(**kwargs))
+        if outcome.get("reason") == CancelReason.TRANSIENT_ERROR:
+            raise CommunicationError(
+                outcome.get("detail") or "Cancel failed with transient error",
+                context={
+                    "provider_status_code": outcome.get("provider_status_code"),
+                    "reason": CancelReason.TRANSIENT_ERROR,
+                },
+            )
         if outcome.get("cancelled"):
             transition_shipment(shipment, ShipmentStatus.CANCELLED)
             await self.repository.update_fields(
@@ -225,7 +248,7 @@ class ShipmentFlow:
         provider_slug: str,
         *,
         query: str | None = None,
-        near: tuple[float, float] | None = None,
+        near: GeoPoint | None = None,
         radius_m: int | None = None,
         point_type: str | None = None,
         limit: int = 20,
@@ -241,7 +264,7 @@ class ShipmentFlow:
         Args:
             provider_slug: Provider identifier.
             query: Free-text search (city, address, or point code).
-            near: (lat, lng) tuple for proximity search.
+            near: :class:`GeoPoint` for proximity search.
             radius_m: Search radius in metres when ``near`` is given.
             point_type: Provider taxonomy filter.
             limit: Maximum number of results.
@@ -249,24 +272,14 @@ class ShipmentFlow:
         Returns:
             List of :class:`PickupPoint` results.
         """
-        self.registry.get_by_slug(provider_slug)
         provider_class = self.registry.get_by_slug(provider_slug)
         provider_config = self.config.get(provider_slug, {})
         from sendparcel.factory import create_provider
 
-        # Use a dummy shipment for provider instantiation — search_points
-        # does not operate on a specific shipment.
-        from sendparcel.providers.dummy import DummyProvider
-
-        dummy = DummyProvider.__new__(DummyProvider)
-        dummy.id = ""
-        dummy.status = "new"
-        dummy.provider = provider_slug
-        dummy.external_id = ""
-        dummy.tracking_number = ""
-
         provider = create_provider(
-            dummy, provider_class, provider_config  # type: ignore[arg-type]
+            _PointSearchShipment(provider=provider_slug),
+            provider_class,
+            provider_config,
         )
         return await self._call_provider(
             provider.search_points(

@@ -261,6 +261,30 @@ class TestFlowCancelShipment:
         # State should not change on transient failure
         assert repo.shipment.status == original_status
 
+    async def test_transient_error_outcome_raises_communication_error(
+        self,
+    ) -> None:
+        """A provider returning a TRANSIENT_ERROR outcome (instead of
+        raising) must still surface as CommunicationError from the flow,
+        so callers get one retryable signal regardless of provider style."""
+        provider_class = CancelOutcomeTestProvider
+        provider_class.cancel_result = CancelOutcome(
+            cancelled=False,
+            reason=CancelReason.TRANSIENT_ERROR,
+            retryable=True,
+            provider_status_code=503,
+            detail="Service unavailable",
+        )
+        flow, _, repo = _make_flow(provider_class)
+        original_status = ShipmentStatus.CREATED
+        repo.shipment.status = original_status
+
+        with pytest.raises(CommunicationError) as exc_info:
+            await flow.cancel_shipment(repo.shipment)
+
+        assert exc_info.value.context["provider_status_code"] == 503
+        assert repo.shipment.status == original_status
+
     async def test_cancel_from_new_status(self) -> None:
         provider_class = CancelOutcomeTestProvider
         provider_class.cancel_result = CancelOutcome(

@@ -13,6 +13,7 @@ from sendparcel.types import (
     AddressInfo,
     CallbackContext,
     CancelOutcome,
+    GeoPoint,
     LabelInfo,
     ParcelInfo,
     PickupPoint,
@@ -233,9 +234,7 @@ class BaseProvider(ABC):
             "status polling"
         )
 
-    async def cancel_shipment(
-        self, **kwargs: Any
-    ) -> CancelOutcome:
+    async def cancel_shipment(self, **kwargs: Any) -> CancelOutcome:
         """Cancel shipment if provider supports cancellation.
 
         Returns a structured :class:`CancelOutcome` so callers can
@@ -254,7 +253,7 @@ class BaseProvider(ABC):
         self,
         *,
         query: str | None = None,
-        near: tuple[float, float] | None = None,
+        near: GeoPoint | None = None,
         radius_m: int | None = None,
         point_type: str | None = None,
         limit: int = 20,
@@ -264,7 +263,7 @@ class BaseProvider(ABC):
 
         Args:
             query: Free-text search (city, address, or point code).
-            near: (lat, lng) tuple for proximity search.
+            near: :class:`GeoPoint` for proximity search.
             radius_m: Search radius in metres when ``near`` is given.
             point_type: Provider taxonomy filter (e.g. "parcel_locker").
             limit: Maximum number of results to return.
@@ -307,6 +306,5 @@ class BaseProvider(ABC):
                 rate lookup (callers should fall back to static pricing).
         """
         raise ProviderCapabilityError(
-            f"Provider {self.__class__.__name__!r} does not support "
-            "rate lookup"
+            f"Provider {self.__class__.__name__!r} does not support rate lookup"
         )

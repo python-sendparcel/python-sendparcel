@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, TypedDict
@@ -179,7 +180,7 @@ class Quote(_QuoteRequired, total=False):
     Use ``Decimal`` — never ``float`` — for monetary values.
     """
 
-    valid_until: str | None
+    valid_until: datetime | None
     raw: dict[str, Any] | None
 
 
