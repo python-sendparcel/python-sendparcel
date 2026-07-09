@@ -8,7 +8,12 @@ import pytest
 from sendparcel.enums import ConfirmationMethod
 from sendparcel.exceptions import InvalidCallbackError
 from sendparcel.providers.dummy import DummyProvider
-from sendparcel.types import AddressInfo, CallbackContext, ParcelInfo
+from sendparcel.types import (
+    AddressInfo,
+    CallbackContext,
+    CancelReason,
+    ParcelInfo,
+)
 
 _SENDER = AddressInfo(
     name="Test Sender",
@@ -166,19 +171,38 @@ class TestFetchShipmentStatus:
 
 class TestCancelShipment:
     @pytest.mark.asyncio
-    async def test_cancel_returns_true_by_default(self) -> None:
+    async def test_cancel_returns_outcome_by_default(self) -> None:
         provider = DummyProvider(DummyShipment(), config={})
 
-        result = await provider.cancel_shipment()
+        outcome = await provider.cancel_shipment()
 
-        assert result is True
+        assert outcome["cancelled"] is True
+        assert outcome["reason"] == CancelReason.CANCELLED
+        assert outcome["retryable"] is False
 
     @pytest.mark.asyncio
-    async def test_cancel_can_be_configured_to_fail(self) -> None:
+    async def test_cancel_can_be_configured_to_refuse(self) -> None:
         provider = DummyProvider(
             DummyShipment(), config={"cancel_success": False}
         )
 
-        result = await provider.cancel_shipment()
+        outcome = await provider.cancel_shipment()
 
-        assert result is False
+        assert outcome["cancelled"] is False
+        assert outcome["reason"] == CancelReason.NOT_CANCELLABLE
+        assert outcome["retryable"] is False
+
+    @pytest.mark.asyncio
+    async def test_cancel_reason_is_configurable(self) -> None:
+        provider = DummyProvider(
+            DummyShipment(),
+            config={
+                "cancel_success": False,
+                "cancel_reason": "refused_in_transit",
+            },
+        )
+
+        outcome = await provider.cancel_shipment()
+
+        assert outcome["cancelled"] is False
+        assert outcome["reason"] == CancelReason.REFUSED_IN_TRANSIT

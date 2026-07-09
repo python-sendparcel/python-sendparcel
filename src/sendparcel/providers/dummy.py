@@ -12,6 +12,8 @@ from sendparcel.provider import BaseProvider
 from sendparcel.types import (
     AddressInfo,
     CallbackContext,
+    CancelOutcome,
+    CancelReason,
     LabelInfo,
     ParcelInfo,
     ShipmentCreateResult,
@@ -78,6 +80,23 @@ class DummyProvider(BaseProvider):
             status=self.get_setting("status_override", self.shipment.status)
         )
 
-    async def cancel_shipment(self, **kwargs: Any) -> bool:
+    async def cancel_shipment(self, **kwargs: Any) -> CancelOutcome:
+        """Cancel with a configurable structured outcome.
+
+        Settings: ``cancel_success`` (bool, default True) and
+        ``cancel_reason`` (a :class:`CancelReason` value used when the
+        cancel is configured to fail; defaults to ``not_cancellable``).
+        """
         await self._simulate_latency()
-        return bool(self.get_setting("cancel_success", True))
+        if bool(self.get_setting("cancel_success", True)):
+            return CancelOutcome(
+                cancelled=True, reason=CancelReason.CANCELLED, retryable=False
+            )
+        reason = CancelReason(
+            self.get_setting("cancel_reason", CancelReason.NOT_CANCELLABLE)
+        )
+        return CancelOutcome(
+            cancelled=False,
+            reason=reason,
+            retryable=reason == CancelReason.TRANSIENT_ERROR,
+        )

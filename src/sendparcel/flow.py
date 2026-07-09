@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -227,7 +227,10 @@ class ShipmentFlow:
         - ``AUTH_ERROR`` → re-raises provider auth error.
         """
         provider = self._get_provider(shipment)
-        outcome = await self._call_provider(provider.cancel_shipment(**kwargs))
+        outcome = cast(
+            "CancelOutcome",
+            await self._call_provider(provider.cancel_shipment(**kwargs)),
+        )
         if outcome.get("reason") == CancelReason.TRANSIENT_ERROR:
             raise CommunicationError(
                 outcome.get("detail") or "Cancel failed with transient error",
@@ -281,15 +284,18 @@ class ShipmentFlow:
             provider_class,
             provider_config,
         )
-        return await self._call_provider(
-            provider.search_points(
-                query=query,
-                near=near,
-                radius_m=radius_m,
-                point_type=point_type,
-                limit=limit,
-                **kwargs,
-            )
+        return cast(
+            "list[PickupPoint]",
+            await self._call_provider(
+                provider.search_points(
+                    query=query,
+                    near=near,
+                    radius_m=radius_m,
+                    point_type=point_type,
+                    limit=limit,
+                    **kwargs,
+                )
+            ),
         )
 
     def _get_provider(self, shipment: Shipment) -> BaseProvider:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 (2026-07-09)
+
+- `DummyProvider.cancel_shipment` returns a structured `CancelOutcome`
+  (configurable via `cancel_success` / `cancel_reason` settings) instead of a
+  bare bool — aligning core's own provider with the 0.3.1 cancel trait that
+  `ShipmentFlow.cancel_shipment` already requires.
+- `ShipmentFlow`: typed returns for `cancel_shipment` / `search_points`
+  (mypy no-any-return).
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
